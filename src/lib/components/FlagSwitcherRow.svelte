@@ -1,0 +1,285 @@
+<script lang="ts">
+	import { untrack } from 'svelte';
+	import type { AmplitudeFlag, AmplitudeTargetSegment, FlagSwitcherRowData } from '$lib/types';
+	import TableBodyRow from './TableBodyRow.svelte';
+	import EmailToggleButton from './EmailToggleButton.svelte';
+	import Button from './Button.svelte';
+	import DropdownMenu from './DropdownMenu.svelte';
+
+	interface Props {
+		row: FlagSwitcherRowData;
+		flags: AmplitudeFlag[];
+		onUpdate: (updated: FlagSwitcherRowData) => void;
+		onRemove: () => void;
+		onClone: (row: FlagSwitcherRowData) => void;
+	}
+
+	let { row, flags, onUpdate, onRemove, onClone }: Props = $props();
+
+	let flagKey = $state(untrack(() => row.flagKey));
+	let segmentName = $state(untrack(() => row.segmentName));
+	let email = $state(untrack(() => row.email));
+	let localFlag = $state<AmplitudeFlag | null>(untrack(() => row.flag));
+	let toggleLoading = $state(false);
+	let toggleError = $state<string | null>(null);
+	let dropdownOpen = $state(false);
+
+	let filteredFlagItems = $derived(
+		flagKey.length === 0
+			? []
+			: flags
+					.filter((f) => f.key.toLowerCase().includes(flagKey.toLowerCase()))
+					.map((f) => ({ label: f.key, value: f.key }))
+	);
+
+	let matchedFlag = $derived(localFlag ?? flags.find((f) => f.key === flagKey) ?? null);
+	let selectedSegment = $derived(
+		matchedFlag?.targetSegments.find((s) => s.name === segmentName) ?? null
+	);
+	let emailInSegment = $derived(
+		email.length > 0 &&
+			(selectedSegment?.conditions.some((c) => c.values.includes(email)) ?? false)
+	);
+
+	function applyFlagKey(newKey: string) {
+		flagKey = newKey;
+		segmentName = '';
+		email = '';
+		localFlag = null;
+		toggleError = null;
+		onUpdate({ ...row, flagKey: newKey, segmentName: '', email: '', flag: null });
+	}
+
+	function handleFlagKeyInput(e: Event) {
+		const newKey = (e.target as HTMLInputElement).value;
+		dropdownOpen = newKey.length > 0;
+		applyFlagKey(newKey);
+	}
+
+	function handleFlagKeyFocus() {
+		if (flagKey.length > 0) dropdownOpen = true;
+	}
+
+	function handleFlagKeyBlur() {
+		setTimeout(() => {
+			dropdownOpen = false;
+		}, 150);
+	}
+
+	function selectFlagKey(value: string) {
+		dropdownOpen = false;
+		applyFlagKey(value);
+	}
+
+	function handleSegmentChange(e: Event) {
+		segmentName = (e.target as HTMLSelectElement).value;
+		email = '';
+		toggleError = null;
+		onUpdate({ ...row, flagKey, segmentName, email: '', flag: localFlag });
+	}
+
+	function handleEmailInput(e: Event) {
+		email = (e.target as HTMLInputElement).value;
+		toggleError = null;
+		onUpdate({ ...row, flagKey, segmentName, email, flag: localFlag });
+	}
+
+	async function handleToggle() {
+		if (!matchedFlag || !selectedSegment) return;
+
+		const updatedSegments: AmplitudeTargetSegment[] = matchedFlag.targetSegments.map((seg) => {
+			if (seg.name !== segmentName) return seg;
+			return {
+				...seg,
+				conditions: seg.conditions.map((c) => ({
+					...c,
+					values: emailInSegment
+						? c.values.filter((v) => v !== email)
+						: [...c.values, email]
+				}))
+			};
+		});
+
+		toggleLoading = true;
+		toggleError = null;
+
+		try {
+			const res = await fetch(`/api/amplitude/flags/${matchedFlag.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ targetSegments: updatedSegments, flagKey })
+			});
+
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+			const updatedFlag = (await res.json()) as AmplitudeFlag;
+			localFlag = updatedFlag;
+			onUpdate({ ...row, flagKey, segmentName, email, flag: updatedFlag });
+		} catch (err) {
+			toggleError = err instanceof Error ? err.message : 'Toggle failed';
+		} finally {
+			toggleLoading = false;
+		}
+	}
+</script>
+
+<TableBodyRow>
+	<td class="cell-flag-key">
+		<div class="flag-key-input">
+			<div class="combobox-wrapper">
+				<input
+					type="text"
+					class="text-input"
+					value={flagKey}
+					oninput={handleFlagKeyInput}
+					onfocus={handleFlagKeyFocus}
+					onblur={handleFlagKeyBlur}
+					placeholder="flag-key"
+					spellcheck="false"
+					autocomplete="off"
+				/>
+				<DropdownMenu
+					bind:open={dropdownOpen}
+					items={filteredFlagItems}
+					onSelect={selectFlagKey}
+				/>
+			</div>
+			{#if matchedFlag}
+				<span class="match-indicator" title={matchedFlag.name}>●</span>
+			{/if}
+		</div>
+	</td>
+	<td class="cell-segment">
+		{#if matchedFlag}
+			<select class="select-input" onchange={handleSegmentChange} value={segmentName}>
+				<option value="">Select segment…</option>
+				{#each matchedFlag.targetSegments as seg (seg.name)}
+					<option value={seg.name}>{seg.name}</option>
+				{/each}
+			</select>
+		{/if}
+	</td>
+	<td class="cell-email">
+		{#if matchedFlag && segmentName}
+			<input
+				type="email"
+				class="text-input"
+				value={email}
+				oninput={handleEmailInput}
+				placeholder="user@example.com"
+			/>
+		{/if}
+	</td>
+	<td class="cell-toggle">
+		{#if matchedFlag && segmentName && email}
+			<EmailToggleButton
+				{email}
+				inSegment={emailInSegment}
+				onclick={handleToggle}
+				loading={toggleLoading}
+			/>
+			{#if toggleError}
+				<span class="toggle-error">{toggleError}</span>
+			{/if}
+		{/if}
+	</td>
+	<td class="cell-link">
+		{#if matchedFlag}
+			<Button
+				variant="link"
+				label="↗ Amplitude"
+				ariaLabel="Open flag in Amplitude dashboard"
+				onclick={() =>
+					window.open(
+						`https://app.amplitude.com/experiment/housecall/${matchedFlag.projectId}/config/${matchedFlag.id}/configure`,
+						'_blank',
+						'noopener,noreferrer'
+					)}
+			/>
+		{/if}
+	</td>
+	<td class="cell-remove">
+		<Button variant="icon" label="⧉" ariaLabel="Clone row" onclick={() => onClone(row)} />
+		<Button variant="icon" label="×" ariaLabel="Remove row" onclick={onRemove} />
+	</td>
+</TableBodyRow>
+
+<style>
+	td {
+		padding: 6px 12px;
+		border-bottom: 1px solid var(--color-border);
+		vertical-align: middle;
+	}
+
+	.cell-flag-key {
+		white-space: nowrap;
+	}
+
+	.flag-key-input {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.combobox-wrapper {
+		position: relative;
+	}
+
+	.text-input {
+		padding: 4px 8px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		font-size: 12px;
+		font-family: inherit;
+		color: var(--color-text);
+		background: var(--color-surface);
+		outline: none;
+		transition: border-color 0.1s ease;
+	}
+
+	.text-input:focus {
+		border-color: var(--color-primary);
+	}
+
+	.match-indicator {
+		color: var(--color-success);
+		font-size: 10px;
+		flex-shrink: 0;
+	}
+
+	.select-input {
+		padding: 4px 8px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		font-size: 12px;
+		font-family: inherit;
+		color: var(--color-text);
+		background: var(--color-surface);
+		cursor: pointer;
+		outline: none;
+	}
+
+	.select-input:focus {
+		border-color: var(--color-primary);
+	}
+
+	.cell-toggle {
+		white-space: nowrap;
+	}
+
+	.toggle-error {
+		display: block;
+		font-size: 11px;
+		color: var(--color-danger);
+		margin-top: 2px;
+	}
+
+	.cell-remove {
+		text-align: right;
+		white-space: nowrap;
+		display: flex;
+		gap: 4px;
+		align-items: center;
+		justify-content: flex-end;
+	}
+</style>
