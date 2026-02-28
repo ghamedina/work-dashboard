@@ -20,12 +20,7 @@
 </script>
 
 <div class="controls">
-	<div class="controls-left">
-		<Tooltip text="Reload data">
-			<Button variant="icon" label="↻" ariaLabel="Reload data" onclick={onReload} />
-		</Tooltip>
-	</div>
-
+	<h2 class="controls-title">Current Work</h2>
 	<div class="controls-right">
 		<ButtonGroup>
 			{#each modeButtons as btn, i (btn.value)}
@@ -41,6 +36,9 @@
 				</Tooltip>
 			{/each}
 		</ButtonGroup>
+		<Tooltip text="Reload data">
+			<Button variant="icon" label="↻" ariaLabel="Reload data" onclick={onReload} />
+		</Tooltip>
 	</div>
 </div>
 
@@ -54,7 +52,13 @@
 		background: var(--color-surface);
 	}
 
-	.controls-left,
+	.controls-title {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--color-text);
+		margin: 0;
+	}
+
 	.controls-right {
 		display: flex;
 		align-items: center;

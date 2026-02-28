@@ -5,6 +5,7 @@
 	import Button from './Button.svelte';
 	import Table from './Table.svelte';
 	import TableHeaderRow from './TableHeaderRow.svelte';
+  import Container from './Container.svelte';
 
 	const STORAGE_KEY = 'flagSwitcherRows';
 
@@ -14,6 +15,8 @@
 	let flags = $state<AmplitudeFlag[]>([]);
 	let flagsLoading = $state(false);
 	let flagsError = $state<string | null>(null);
+	let localProEmail = $state<string | null>(null);
+	let copied = $state(false);
 
 	onMount(() => {
 		const stored = localStorage.getItem(STORAGE_KEY);
@@ -26,7 +29,28 @@
 			}
 		}
 		fetchFlags();
+		fetchLocalPro();
 	});
+
+	async function fetchLocalPro() {
+		try {
+			const res = await fetch('/hcp-api/alpha/pro', {
+				headers: { Accept: 'application/json' }
+			});
+			if (!res.ok) return;
+			const pro = await res.json();
+			localProEmail = pro.email ?? null;
+		} catch {
+			// local server not running or not logged in
+		}
+	}
+
+	async function copyEmail() {
+		if (!localProEmail) return;
+		await navigator.clipboard.writeText(localProEmail);
+		copied = true;
+		setTimeout(() => (copied = false), 2000);
+	}
 
 	async function fetchFlags() {
 		flagsLoading = true;
@@ -96,10 +120,19 @@
 	}
 </script>
 
-<div class="flag-switcher">
+<Container>
 	<div class="flag-switcher-header">
 		<h2 class="flag-switcher-title">Feature Flag Switcher</h2>
 		<div class="flag-switcher-actions">
+			{#if localProEmail}
+				<button class="local-pro-btn" onclick={copyEmail} aria-label="Copy email to clipboard">
+					<span class="local-pro-email">{localProEmail}</span>
+					<span class="local-pro-label">logged in</span>
+					<span class="local-pro-copy">{copied ? '✓' : '⧉'}</span>
+				</button>
+			{:else}
+				<span class="no-local">No local</span>
+			{/if}
 			<Button
 				variant="icon"
 				label={flagsLoading ? '…' : '↻'}
@@ -148,18 +181,9 @@
 			<p>No rows yet — click <strong>+</strong> to add one.</p>
 		</div>
 	{/if}
-</div>
+	</Container>
 
 <style>
-	.flag-switcher {
-		max-width: 1280px;
-		margin: 16px auto;
-		background: var(--color-surface);
-		border-radius: var(--radius);
-		box-shadow: var(--shadow-md);
-		overflow: hidden;
-	}
-
 	.flag-switcher-header {
 		display: flex;
 		align-items: center;
@@ -180,6 +204,52 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
+	}
+
+	.no-local {
+		font-size: 12px;
+		color: var(--color-text-muted);
+		padding: 0 4px;
+	}
+
+	.local-pro-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		height: 32px;
+		padding: 0 10px;
+		background: none;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		font-family: inherit;
+		font-size: 12px;
+		cursor: pointer;
+		color: var(--color-text);
+		transition: filter 0.1s ease, background 0.1s ease;
+		line-height: 1;
+	}
+
+	.local-pro-btn:hover {
+		filter: brightness(0.94);
+		background: var(--color-gray-muted);
+	}
+
+	.local-pro-email {
+		font-weight: 500;
+		max-width: 200px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.local-pro-label {
+		color: var(--color-text-muted);
+	}
+
+	.local-pro-copy {
+		font-size: 16px;
+		line-height: 1;
+		color: var(--color-text-muted);
 	}
 
 .flags-error {

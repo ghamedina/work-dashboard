@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { DashboardRow, RenderMode, CIPipelineStatus, MRComment } from '$lib/types';
+	import type { DashboardRow, RenderMode, CIPipelineStatus, MRComment, JiraDetail } from '$lib/types';
 	import Table from './Table.svelte';
 	import TableHeaderRow from './TableHeaderRow.svelte';
 	import TableBodyRow from './TableBodyRow.svelte';
@@ -11,18 +11,58 @@
 	interface Props {
 		rows: DashboardRow[];
 		mode: RenderMode;
+		gitlabUnavailable?: boolean;
 	}
 
-	let { rows, mode }: Props = $props();
+	let { rows, mode, gitlabUnavailable = false }: Props = $props();
 
 	let localRows = $state(untrack(() => [...rows]));
 
-	let statusOptions = $derived(
-		[...new Set(localRows.map((r) => r.jiraItem.status))].sort().map((s) => ({ label: s, value: s }))
-	);
+	const statusOptionsCache = new Map<string, string[]>();
+
+	$effect(() => {
+		for (const row of localRows) {
+			const key = row.jiraItem.key;
+			if (statusOptionsCache.has(key)) continue;
+			fetch(`/api/jira/issues/${key}/status`)
+				.then((res) => res.json())
+				.then((data) => {
+					if (data.ok) statusOptionsCache.set(key, data.statuses);
+				})
+				.catch(() => {});
+		}
+	});
 
 	let activeStatusKey = $state<string | null>(null);
+	let statusAnchor = $state<HTMLElement | null>(null);
 	let statusError = $state<{ key: string; message: string } | null>(null);
+	let statusOptionsLoading = $state(false);
+	let activeStatusOptions = $state<{ label: string; value: string }[]>([]);
+
+	async function openStatusDropdown(jiraKey: string, anchor: HTMLElement) {
+		statusAnchor = anchor;
+		activeStatusKey = jiraKey;
+		statusError = null;
+
+		if (statusOptionsCache.has(jiraKey)) {
+			activeStatusOptions = statusOptionsCache.get(jiraKey)!.map((s) => ({ label: s, value: s }));
+			return;
+		}
+
+		statusOptionsLoading = true;
+		activeStatusOptions = [];
+		try {
+			const res = await fetch(`/api/jira/issues/${jiraKey}/status`);
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok || !data.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+			statusOptionsCache.set(jiraKey, data.statuses);
+			activeStatusOptions = data.statuses.map((s: string) => ({ label: s, value: s }));
+		} catch {
+			activeStatusOptions = [];
+		} finally {
+			statusOptionsLoading = false;
+		}
+	}
 
 	async function selectStatus(jiraKey: string, statusName: string) {
 		const rowIdx = localRows.findIndex((r) => r.jiraItem.key === jiraKey);
@@ -120,6 +160,60 @@
 		window.open(url, '_blank', 'noopener,noreferrer');
 	}
 
+	// Detail fetch (copy + expand share cache)
+	const detailCache = new Map<string, JiraDetail>();
+	type CopyState = 'idle' | 'loading' | 'done';
+	const copyStates = new Map<string, CopyState>();
+	let copyStateRevision = $state(0);
+
+	async function fetchDetail(key: string): Promise<JiraDetail> {
+		if (detailCache.has(key)) return detailCache.get(key)!;
+		const res = await fetch(`/api/jira/issues/${key}/detail`);
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		const data: JiraDetail = await res.json();
+		detailCache.set(key, data);
+		return data;
+	}
+
+	async function handleCopy(key: string) {
+		copyStates.set(key, 'loading');
+		copyStateRevision++;
+		try {
+			const detail = await fetchDetail(key);
+			await navigator.clipboard.writeText(JSON.stringify(detail, null, 2));
+			copyStates.set(key, 'done');
+			copyStateRevision++;
+			setTimeout(() => {
+				copyStates.set(key, 'idle');
+				copyStateRevision++;
+			}, 3000);
+		} catch {
+			copyStates.set(key, 'idle');
+			copyStateRevision++;
+		}
+	}
+
+	// Expand row state
+	let expandedKeys = $state(new Set<string>());
+	let expandRevision = $state(0);
+
+	async function toggleExpand(key: string) {
+		const next = new Set(expandedKeys);
+		if (next.has(key)) {
+			next.delete(key);
+		} else {
+			next.add(key);
+			if (!detailCache.has(key)) {
+				fetchDetail(key).then(() => {
+					expandRevision++;
+				}).catch(() => {});
+			}
+		}
+		expandedKeys = next;
+	}
+
+	let totalColumns = $derived(mode === 'summary' ? 6 : 8);
+
 	// Comments modal state
 	let modalOpen = $state(false);
 	let activeModalRow = $state<DashboardRow | null>(null);
@@ -171,9 +265,17 @@
 	}
 </script>
 
+{#if gitlabUnavailable}
+	<div class="vpn-banner">
+		<span class="vpn-banner-icon">⚠</span>
+		GitLab unavailable — Twingate VPN may not be active. MR data is hidden.
+	</div>
+{/if}
+
 <div class={`table-container mode-${mode}`}>
 	<Table>
 		<TableHeaderRow>
+			<th class="col-action"></th>
 			<th>Work Item</th>
 			<th class="col-summary">Summary</th>
 			<th>Status</th>
@@ -186,7 +288,24 @@
 		</TableHeaderRow>
 		<tbody>
 			{#each localRows as row (row.jiraItem.key)}
+				{@const copyState = (copyStateRevision, copyStates.get(row.jiraItem.key) ?? 'idle')}
 				<TableBodyRow>
+					<td class="cell-action">
+						<button
+							class="action-btn"
+							onclick={() => handleCopy(row.jiraItem.key)}
+							disabled={copyState === 'loading'}
+							title="Copy issue detail to clipboard"
+						>
+							{#if copyState === 'loading'}
+								<span class="spinner-sm"></span>
+							{:else if copyState === 'done'}
+								<span class="copy-done">✓</span>
+							{:else}
+								⧉
+							{/if}
+						</button>
+					</td>
 					<td>
 						<Button
 							variant="link"
@@ -194,17 +313,28 @@
 							onclick={() => openLink(row.jiraItem.url)}
 						/>
 					</td>
-					<td class="col-summary summary-text">
-						{displaySummary(row.jiraItem.summary)}
+					<td class="col-summary">
+						<div class="summary-cell">
+							<button
+								class="expand-btn"
+								onclick={() => toggleExpand(row.jiraItem.key)}
+								title={expandedKeys.has(row.jiraItem.key) ? 'Collapse' : 'Expand'}
+							>
+								{expandedKeys.has(row.jiraItem.key) ? '⊟' : '⊞'}
+							</button>
+							<span class="summary-text">{displaySummary(row.jiraItem.summary)}</span>
+						</div>
 					</td>
 					<td>
 						<div class="status-wrapper">
 							<button
 								class={`badge badge-${jiraStatusVariant(row.jiraItem.status)} badge-btn`}
-								onclick={() => {
-									activeStatusKey =
-										activeStatusKey === row.jiraItem.key ? null : row.jiraItem.key;
-									statusError = null;
+								onclick={(e) => {
+									if (activeStatusKey === row.jiraItem.key) {
+										activeStatusKey = null;
+									} else {
+										openStatusDropdown(row.jiraItem.key, e.currentTarget as HTMLElement);
+									}
 								}}
 							>
 								{row.jiraItem.status}
@@ -212,13 +342,14 @@
 							{#if statusError?.key === row.jiraItem.key}
 								<span class="status-error">{statusError.message}</span>
 							{/if}
-							<DropdownMenu
-								open={activeStatusKey === row.jiraItem.key}
-								items={statusOptions}
-								onSelect={(value) => selectStatus(row.jiraItem.key, value)}
-								onClose={() => (activeStatusKey = null)}
-							/>
 						</div>
+						<DropdownMenu
+							open={activeStatusKey === row.jiraItem.key}
+							anchor={activeStatusKey === row.jiraItem.key ? (statusAnchor ?? undefined) : undefined}
+							items={statusOptionsLoading && activeStatusKey === row.jiraItem.key ? [{ label: '…', value: '' }] : activeStatusOptions}
+							onSelect={(value) => { if (value) selectStatus(row.jiraItem.key, value); }}
+							onClose={() => (activeStatusKey = null)}
+						/>
 					</td>
 					<td>
 						{#if row.mr}
@@ -263,11 +394,44 @@
 						</td>
 					{/if}
 				</TableBodyRow>
+				{#if expandedKeys.has(row.jiraItem.key)}
+					{@const detail = (expandRevision, detailCache.get(row.jiraItem.key))}
+					<tr class="expand-row">
+						<td colspan={totalColumns} class="expand-cell">
+							{#if !detail}
+								<span class="loading-text">Loading…</span>
+							{:else}
+								<div class="description-body">
+									{@html detail.description}
+								</div>
+								{#if detail.linkedIssues.length > 0}
+									<table class="linked-issues-table">
+										<thead>
+											<tr><th>Type</th><th>Key</th><th>Summary</th><th>Status</th></tr>
+										</thead>
+										<tbody>
+											{#each detail.linkedIssues as li}
+												<tr>
+													<td>{li.type}</td>
+													<td>
+														<button class="link-btn" onclick={() => openLink(li.url)}>{li.key}</button>
+													</td>
+													<td>{li.summary}</td>
+													<td>{li.status}</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								{/if}
+							{/if}
+						</td>
+					</tr>
+				{/if}
 			{/each}
 
 			{#if rows.length === 0}
 				<TableBodyRow>
-					<td colspan="7" class="empty-state">No active work items found.</td>
+					<td colspan={totalColumns} class="empty-state">No active work items found.</td>
 				</TableBodyRow>
 			{/if}
 		</tbody>
@@ -338,6 +502,22 @@
 </ModalContainer>
 
 <style>
+	.vpn-banner {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 16px;
+		background: var(--color-warning-muted);
+		color: var(--color-warning);
+		font-size: 12px;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.vpn-banner-icon {
+		font-size: 14px;
+		flex-shrink: 0;
+	}
+
 	th {
 		text-align: left;
 		font-size: 11px;
@@ -363,8 +543,86 @@
 		padding: 14px 12px;
 	}
 
+	.col-action {
+		width: 28px;
+		padding: 0 4px;
+	}
+
+	.cell-action {
+		padding: 0 4px;
+		text-align: center;
+	}
+
+	.action-btn {
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-size: 14px;
+		color: var(--color-text-muted);
+		padding: 2px 4px;
+		border-radius: var(--radius);
+		font-family: inherit;
+		line-height: 1;
+		transition: color 0.1s ease;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+	}
+
+	.action-btn:hover:not(:disabled) {
+		color: var(--color-primary);
+	}
+
+	.action-btn:disabled {
+		cursor: default;
+	}
+
+	.copy-done {
+		color: var(--color-success);
+	}
+
+	.spinner-sm {
+		display: inline-block;
+		width: 10px;
+		height: 10px;
+		border: 2px solid var(--color-border);
+		border-top-color: var(--color-primary);
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
+	}
+
 	.col-summary {
 		width: 40%;
+	}
+
+	.summary-cell {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		overflow: hidden;
+	}
+
+	.expand-btn {
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-size: 13px;
+		color: var(--color-text-muted);
+		padding: 0;
+		line-height: 1;
+		flex-shrink: 0;
+		font-family: inherit;
+		transition: color 0.1s ease;
+	}
+
+	.expand-btn:hover {
+		color: var(--color-primary);
 	}
 
 	.summary-text {
@@ -372,7 +630,64 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		max-width: 0;
+	}
+
+	.expand-row td {
+		border-bottom: 1px solid var(--color-border);
+		padding: 0;
+	}
+
+	.expand-cell {
+		padding: 12px 16px !important;
+		background: var(--color-gray-muted);
+	}
+
+	.description-body {
+		font-size: 13px;
+		color: var(--color-text);
+		line-height: 1.5;
+		max-height: 300px;
+		overflow-y: auto;
+		margin-bottom: 12px;
+	}
+
+	.description-body :global(p) {
+		margin: 0 0 8px;
+	}
+
+	.description-body :global(ul),
+	.description-body :global(ol) {
+		margin: 0 0 8px;
+		padding-left: 20px;
+	}
+
+	.loading-text {
+		font-size: 12px;
+		color: var(--color-text-muted);
+	}
+
+	.linked-issues-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 12px;
+		margin-top: 4px;
+	}
+
+	.linked-issues-table th {
+		padding: 4px 8px;
+		background: var(--color-border);
+		color: var(--color-text-muted);
+		font-size: 10px;
+		text-align: left;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.linked-issues-table td {
+		padding: 4px 8px;
+		border-bottom: 1px solid var(--color-border);
+		color: var(--color-text);
 	}
 
 	.col-comments {
@@ -420,7 +735,6 @@
 	}
 
 	.status-wrapper {
-		position: relative;
 		display: inline-flex;
 		flex-direction: column;
 		gap: 2px;

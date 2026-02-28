@@ -1,0 +1,156 @@
+{
+  "flags": [
+    {
+      "id": "693182",
+      "projectId": "217854",
+      "deployments": ["873"],
+      "key": "design-system-list-views-customers-tab",
+      "name": "design-system-list-views-customers-tab",
+      "description": "Controls transition of list views on the customer's tab to new Table component from housecall-ui\nCustomers, Estimates, Jobs, Invoices, Leads",
+      "enabled": true,
+      "evaluationMode": "remote",
+      "bucketingKey": "amplitude_id",
+      "bucketingSalt": "6qCIpE4d",
+      "bucketingUnit": "User",
+      "variants": [
+        {
+          "key": "using-design-system-list-views-customers-tab",
+          "name": "using-design-system-list-views-customers-tab"
+        },
+        {
+          "key": "not-using-design-system-list-views-customers-tab",
+          "name": "not-using-design-system-list-views-customers-tab"
+        }
+      ],
+      "rolloutPercentage": 0,
+      "rolloutWeights": {
+        "using-design-system-list-views-customers-tab": 1,
+        "not-using-design-system-list-views-customers-tab": 1
+      },
+      "targetSegments": [
+        {
+          "name": "Segment 1",
+          "conditions": [
+            {
+              "prop": "gp:email",
+              "op": "is",
+              "type": "property",
+              "values": [
+                "Sienna.magee@housecallpro.com",
+                "norrichs@plumber.com",
+                "noor.ghamedi+preprod@housecallpro.com",
+                "daniel.stochel@housecallpro.com",
+                "michal.rozenek@housecallpro.com",
+                "christina.ip@housecallpro.com",
+                "erick.aguiar+parent@housecallpro.com",
+                "fabian.alvariza+child1@housecallpro.com",
+                "stumpy.avjean@housecallpro.com",
+                "ghamedina@gmail.com",
+                "norrichs@plumberemperor.com",
+                "luis.novoa@housecallpro.com",
+                "efren.morquecho@housecallpro.com",
+                "ben.norrichs+preprod_parent1@housecallpro.com",
+                "jp.carey@housecallpro.com",
+                "the@plumberemperor.com",
+                "jp.carey+starter@housecallpro.com",
+                "jp.carey+preprod@housecallpro.com",
+                "the@plumber.com",
+                "luis.novoa+franchisor@housecallpro.com",
+                "erick.aguiar@housecallpro.com",
+                "kathryn.schmuhl+voiptestingfeb23@housecallpro.com",
+                "kathryn.schmuhl+AItestaccount@housecallpro.com",
+                "konrad.galan@housecallpro.com",
+                "katarzyna.szenajch@housecallpro.com",
+                "katarzyna.szenajch+voip@housecallpro.com",
+                "vinkie.huang@housecallpro.com",
+                "samantha.stephenson@housecallpro.com"
+              ]
+            }
+          ],
+          "percentage": 100,
+          "bucketingKey": "amplitude_id",
+          "rolloutWeights": {
+            "using-design-system-list-views-customers-tab": 100,
+            "not-using-design-system-list-views-customers-tab": 0
+          }
+        },
+        {
+          "name": "Matt's test",
+          "conditions": [
+            {
+              "prop": "gp:pro_uuid",
+              "op": "is",
+              "type": "property",
+              "values": ["pro_9a1665743f2d4786bdbcdbe0d2dc9609"]
+            }
+          ],
+          "percentage": 100,
+          "bucketingKey": "amplitude_id",
+          "rolloutWeights": {
+            "using-design-system-list-views-customers-tab": 100,
+            "not-using-design-system-list-views-customers-tab": 0
+          }
+        },
+        {
+          "name": "Disabled",
+          "conditions": [
+            {
+              "prop": "gp:email",
+              "op": "is",
+              "type": "property",
+              "values": ["the@plumber.com"]
+            }
+          ],
+          "percentage": 100,
+          "bucketingKey": "amplitude_id",
+          "rolloutWeights": {
+            "using-design-system-list-views-customers-tab": 100,
+            "not-using-design-system-list-views-customers-tab": 0
+          }
+        },
+        {
+          "name": "Segment 4",
+          "conditions": [
+            {
+              "prop": "gp:org_uuid",
+              "op": "is",
+              "type": "property",
+              "values": ["2624c728-7856-4310-9a27-bbc71bf37960"]
+            }
+          ],
+          "percentage": 100,
+          "bucketingKey": "amplitude_id",
+          "rolloutWeights": {
+            "using-design-system-list-views-customers-tab": 100,
+            "not-using-design-system-list-views-customers-tab": 0
+          }
+        },
+        {
+          "name": "@Kubat E2E testing",
+          "conditions": [
+            {
+              "prop": "gp:email",
+              "op": "is",
+              "type": "property",
+              "values": ["kubat.kurbanaliev@housecallpro.com"]
+            }
+          ],
+          "percentage": 100,
+          "bucketingKey": "amplitude_id",
+          "rolloutWeights": {
+            "using-design-system-list-views-customers-tab": 100,
+            "not-using-design-system-list-views-customers-tab": 0
+          }
+        }
+      ],
+      "parentDependencies": null,
+      "deleted": false,
+      "tags": ["design-system", "squad:design_system"],
+      "createdBy": "ben.norrichs@buildbook.co",
+      "lastModifiedBy": "ben.norrichs@buildbook.co",
+      "createdAt": "2025-11-11T18:11:40.120Z",
+      "lastModifiedAt": "2026-02-21T20:49:31.336Z"
+    }
+  ],
+  "nextCursor": null
+}

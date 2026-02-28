@@ -16,6 +16,22 @@ function authHeader(): string {
 	return 'Basic ' + btoa(`${JIRA_EMAIL}:${JIRA_TOKEN}`);
 }
 
+export const GET: RequestHandler = async ({ params }) => {
+	const { key } = params;
+	const headers = { Authorization: authHeader() };
+
+	const res = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${key}/transitions`, { headers });
+
+	if (!res.ok) {
+		return json({ ok: false, error: `Jira API error ${res.status}` }, { status: 502 });
+	}
+
+	const { transitions }: JiraTransitionsResponse = await res.json();
+	const statuses = transitions.map((t) => t.to.name);
+
+	return json({ ok: true, statuses });
+};
+
 export const PATCH: RequestHandler = async ({ params, request }) => {
 	const { key } = params;
 	const body = await request.json().catch(() => null);

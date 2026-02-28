@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(head:*)",
+      "WebFetch(domain:www.docs.developers.amplitude.com)",
+      "WebFetch(domain:amplitude.com)",
+      "Bash(curl:*)"
+    ],
+    "defaultMode": "bypassPermissions"
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "atlassian",
+    "sentry",
+    "glab",
+    "github"
+  ]
+}

@@ -23,14 +23,21 @@
 	let toggleLoading = $state(false);
 	let toggleError = $state<string | null>(null);
 	let dropdownOpen = $state(false);
+	let dropdownActiveIndex = $state(-1);
+	let inputEl = $state<HTMLInputElement | undefined>();
 
-	let filteredFlagItems = $derived(
-		flagKey.length === 0
-			? []
-			: flags
-					.filter((f) => f.key.toLowerCase().includes(flagKey.toLowerCase()))
-					.map((f) => ({ label: f.key, value: f.key }))
-	);
+	let filteredFlagItems = $derived.by(() => {
+		const terms = flagKey.toLowerCase().split(' ').filter((t) => t.length > 0);
+		if (terms.length === 0) return [];
+		return flags
+			.filter((f) => terms.every((t) => f.key.toLowerCase().includes(t)))
+			.map((f) => ({ label: f.key, value: f.key }));
+	});
+
+	$effect(() => {
+		filteredFlagItems;
+		dropdownActiveIndex = -1;
+	});
 
 	let matchedFlag = $derived(localFlag ?? flags.find((f) => f.key === flagKey) ?? null);
 	let selectedSegment = $derived(
@@ -61,14 +68,31 @@
 	}
 
 	function handleFlagKeyBlur() {
-		setTimeout(() => {
-			dropdownOpen = false;
-		}, 150);
+		dropdownOpen = false;
 	}
 
 	function selectFlagKey(value: string) {
 		dropdownOpen = false;
+		dropdownActiveIndex = -1;
 		applyFlagKey(value);
+	}
+
+	function handleFlagKeyKeydown(e: KeyboardEvent) {
+		if (!dropdownOpen || filteredFlagItems.length === 0) return;
+
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			dropdownActiveIndex = Math.min(dropdownActiveIndex + 1, filteredFlagItems.length - 1);
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			dropdownActiveIndex = Math.max(dropdownActiveIndex - 1, 0);
+		} else if (e.key === 'Enter' && dropdownActiveIndex >= 0) {
+			e.preventDefault();
+			selectFlagKey(filteredFlagItems[dropdownActiveIndex].value);
+		} else if (e.key === 'Escape') {
+			dropdownOpen = false;
+			dropdownActiveIndex = -1;
+		}
 	}
 
 	function handleSegmentChange(e: Event) {
@@ -126,28 +150,30 @@
 <TableBodyRow>
 	<td class="cell-flag-key">
 		<div class="flag-key-input">
-			<div class="combobox-wrapper">
-				<input
-					type="text"
-					class="text-input"
-					value={flagKey}
-					oninput={handleFlagKeyInput}
-					onfocus={handleFlagKeyFocus}
-					onblur={handleFlagKeyBlur}
-					placeholder="flag-key"
-					spellcheck="false"
-					autocomplete="off"
-				/>
-				<DropdownMenu
-					bind:open={dropdownOpen}
-					items={filteredFlagItems}
-					onSelect={selectFlagKey}
-				/>
-			</div>
+			<input
+				bind:this={inputEl}
+				type="text"
+				class="text-input"
+				value={flagKey}
+				oninput={handleFlagKeyInput}
+				onfocus={handleFlagKeyFocus}
+				onblur={handleFlagKeyBlur}
+				onkeydown={handleFlagKeyKeydown}
+				placeholder="flag-key"
+				spellcheck="false"
+				autocomplete="off"
+			/>
 			{#if matchedFlag}
 				<span class="match-indicator" title={matchedFlag.name}>●</span>
 			{/if}
 		</div>
+		<DropdownMenu
+			bind:open={dropdownOpen}
+			bind:activeIndex={dropdownActiveIndex}
+			anchor={inputEl}
+			items={filteredFlagItems}
+			onSelect={selectFlagKey}
+		/>
 	</td>
 	<td class="cell-segment">
 		{#if matchedFlag}
@@ -221,11 +247,7 @@
 		gap: 6px;
 	}
 
-	.combobox-wrapper {
-		position: relative;
-	}
-
-	.text-input {
+.text-input {
 		padding: 4px 8px;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);

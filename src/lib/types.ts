@@ -69,3 +69,18 @@ export interface FlagSwitcherRowData {
 	segmentName: string;
 	email: string;
 }
+
+export interface JiraDetail {
+	summary: string;
+	description: string;
+	status: string;
+	assignee: string | null;
+	reporter: string | null;
+	priority: string | null;
+	issuetype: string;
+	labels: string[];
+	created: string;
+	updated: string;
+	linkedIssues: Array<{ type: string; key: string; summary: string; status: string; url: string }>;
+	comments: Array<{ author: string; body: string; created: string }>;
+}

@@ -11,6 +11,10 @@
 
 	let { data }: { data: PageData } = $props();
 	let mode = $state<RenderMode>('compact');
+	let gitlabVpnError = $state(false);
+	$effect(() => {
+		data.streamed.gitlabVpnError.then((v) => { gitlabVpnError = v; });
+	});
 
 	function handleReload() {
 		invalidateAll();
@@ -28,7 +32,7 @@
 		<Loader jiraStatus={data.streamed.jiraStatus} gitlabStatus={data.streamed.gitlabStatus} />
 	{:then result}
 		{#if result.data !== null}
-			<DataTable rows={result.data} {mode} />
+			<DataTable rows={result.data} {mode} gitlabUnavailable={gitlabVpnError} />
 		{:else}
 			<div class="error-state">
 				<p>Failed to load dashboard data.</p>

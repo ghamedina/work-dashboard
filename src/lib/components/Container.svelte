@@ -8,17 +8,17 @@
 	let { children }: Props = $props();
 </script>
 
-<div class="dashboard">
+<section>
 	{@render children()}
-</div>
+</section>
 
 <style>
-	.dashboard {
+	section {
 		max-width: 1280px;
 		margin: 24px auto;
 		background: var(--color-surface);
 		border-radius: var(--radius);
 		box-shadow: var(--shadow-md);
-		overflow: hidden;
+		overflow: visible;
 	}
 </style>
