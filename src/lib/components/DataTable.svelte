@@ -7,6 +7,7 @@
 	import Button from './Button.svelte';
 	import ModalContainer from './ModalContainer.svelte';
 	import DropdownMenu from './DropdownMenu.svelte';
+	import ClaudePicker from './ClaudePicker.svelte';
 
 	interface Props {
 		rows: DashboardRow[];
@@ -187,20 +188,20 @@
 		}
 	}
 
-	async function handleOpenClaude(key: string) {
-		claudeStates[key] = 'loading';
-		try {
-			const res = await fetch('/api/claude/open', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ key })
-			});
-			if (!res.ok) throw new Error();
-			claudeStates[key] = 'done';
-			setTimeout(() => { claudeStates[key] = 'idle'; }, 3000);
-		} catch {
-			claudeStates[key] = 'idle';
-		}
+	let claudePickerOpen = $state(false);
+	let claudePickerKey = $state('');
+
+	function handleOpenClaude(key: string) {
+		claudePickerKey = key;
+		claudePickerOpen = true;
+	}
+
+	function handleClaudeDone() {
+		claudeStates[claudePickerKey] = 'done';
+		claudePickerOpen = false;
+		setTimeout(() => {
+			claudeStates[claudePickerKey] = 'idle';
+		}, 3000);
 	}
 
 	// Expand row state
@@ -459,6 +460,8 @@
 		</tbody>
 	</Table>
 </div>
+
+<ClaudePicker bind:open={claudePickerOpen} jiraKey={claudePickerKey} onDone={handleClaudeDone} />
 
 <ModalContainer bind:open={modalOpen}>
 	{#snippet title()}

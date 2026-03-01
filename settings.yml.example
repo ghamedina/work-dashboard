@@ -1,0 +1,43 @@
+jira:
+  email: your.email@company.com
+  baseUrl: https://your-instance.atlassian.net
+  projectKeys:
+    - YOUR_PROJECT_KEY
+
+gitlab:
+  authorUsername: your.username
+  baseUrl: https://gitlab.com
+  projectId: 0
+  repo: your-org/your-repo
+
+amplitude:
+  baseUrl: https://experiment.amplitude.com/api/1
+
+claudePrompt:
+  default: basic
+  basePath: ~/                    # base directory for path-type prompts
+  prompts:
+    basic:
+      type: text
+      data: "Here is context for a Jira ticket I'm working on. Help me think through it."
+    # bugfix:
+    #   type: path
+    #   data: $basePath/bug-workflow.md        # resolves $basePath → basePath value
+    # explore:
+    #   type: text
+    #   data: "Explore this issue in the codebase and make a plan for fixing it:"
+
+repoPath:
+  default: ~/dev/my-project       # pre-selected path
+  repoPaths:
+    - ~/dev/*                     # expands to all subfolders in ~/dev/
+    - ~/projects/specific-repo    # literal path
+
+terminal:
+  terminalChoice: Terminal        # Terminal or iTerm2
+  terminalConfigs:
+    Terminal:
+      shell: zsh
+    iTerm2:
+      shell: zsh
+      profile: Default

@@ -20,7 +20,7 @@ Thumbs.db
 !.env.test
 
 # User config (contains personal information)
-settings.user.yml
+settings.yml
 
 # Vite
 vite.config.js.timestamp-*

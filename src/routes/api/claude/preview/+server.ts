@@ -1,0 +1,98 @@
+import { json } from '@sveltejs/kit';
+import { readFileSync, existsSync } from 'fs';
+import { homedir } from 'os';
+import { resolve } from 'path';
+import type { RequestHandler } from './$types';
+import type { JiraDetail } from '$lib/types';
+import { getConfig } from '$lib/config';
+
+function resolveBasePath(basePath: string): string {
+	if (basePath.startsWith('~/')) return basePath.replace('~', homedir());
+	if (basePath.startsWith('/')) return basePath;
+	return resolve(process.cwd(), basePath);
+}
+
+function resolvePromptText(promptKey: string): string {
+	const { claudePrompt } = getConfig();
+	const entry = claudePrompt.prompts[promptKey];
+	if (!entry) return '';
+	if (entry.type === 'text') return entry.data;
+	const basePath = resolveBasePath(claudePrompt.basePath);
+	const resolved = entry.data.replace('$basePath', basePath);
+	if (!existsSync(resolved)) throw new Error(`Prompt file not found: ${resolved}`);
+	return readFileSync(resolved, 'utf-8').trim();
+}
+
+function stripHtml(html: string): string {
+	return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function buildPrompt(key: string, detail: JiraDetail, preamble: string): string {
+	const description = stripHtml(detail.description);
+	const lines: string[] = [
+		preamble,
+		'',
+		`Jira work item ${key}: ${detail.summary}`,
+		'',
+		`Type: ${detail.issuetype} | Status: ${detail.status} | Priority: ${detail.priority ?? 'None'}`,
+		`Assignee: ${detail.assignee ?? 'Unassigned'} | Reporter: ${detail.reporter ?? 'Unknown'}`
+	];
+
+	if (detail.labels.length > 0) {
+		lines.push(`Labels: ${detail.labels.join(', ')}`);
+	}
+
+	lines.push('', 'Description:', description || '(no description)');
+
+	if (detail.linkedIssues.length > 0) {
+		lines.push('', 'Linked issues:');
+		for (const li of detail.linkedIssues) {
+			lines.push(`  ${li.type}: ${li.key} — ${li.summary} (${li.status})`);
+		}
+	}
+
+	const recentComments = detail.comments.slice(-3);
+	if (recentComments.length > 0) {
+		lines.push(
+			'',
+			`Recent comments (showing last ${recentComments.length} of ${detail.comments.length}):`
+		);
+		for (const c of recentComments) {
+			const body = c.body.length > 300 ? c.body.slice(0, 300) + '…' : c.body;
+			lines.push(`  ${c.author} (${c.created.slice(0, 10)}): ${body}`);
+		}
+	}
+
+	return lines.join('\n');
+}
+
+export const POST: RequestHandler = async ({ request, fetch: kitFetch }) => {
+	let key: string;
+	let promptKey: string;
+	try {
+		({ key, promptKey } = await request.json());
+	} catch {
+		return json({ ok: false, error: 'Invalid request body' }, { status: 400 });
+	}
+
+	const detailRes = await kitFetch(`/api/jira/issues/${key}/detail`);
+	if (!detailRes.ok) {
+		const errData = await detailRes.json().catch(() => ({}));
+		return json(
+			{ ok: false, error: errData.error ?? `Failed to fetch detail (${detailRes.status})` },
+			{ status: 502 }
+		);
+	}
+
+	const detail: JiraDetail = await detailRes.json();
+
+	let preamble: string;
+	try {
+		preamble = resolvePromptText(promptKey);
+	} catch (e) {
+		return json({ ok: false, error: (e as Error).message }, { status: 422 });
+	}
+
+	const text = buildPrompt(key, detail, preamble);
+	return json({ text });
+};

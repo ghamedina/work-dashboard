@@ -5,9 +5,10 @@
 		open: boolean;
 		title: Snippet;
 		children: Snippet;
+		size?: 'default' | 'wide';
 	}
 
-	let { open = $bindable(), title, children }: Props = $props();
+	let { open = $bindable(), title, children, size = 'default' }: Props = $props();
 
 	function close() {
 		open = false;
@@ -24,7 +25,7 @@
 
 {#if open}
 	<div class="backdrop" onclick={close} role="presentation"></div>
-	<div class="modal" role="dialog" aria-modal="true">
+	<div class="modal" role="dialog" aria-modal="true" style:--modal-max-width={size === 'wide' ? '900px' : '700px'}>
 		<div class="modal-header">
 			<div class="modal-title">
 				{@render title()}
@@ -52,7 +53,7 @@
 		transform: translate(-50%, -50%);
 		z-index: 201;
 		width: 90vw;
-		max-width: 700px;
+		max-width: var(--modal-max-width, 700px);
 		max-height: 80vh;
 		display: flex;
 		flex-direction: column;

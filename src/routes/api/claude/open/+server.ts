@@ -1,27 +1,46 @@
 import { json } from '@sveltejs/kit';
 import { exec } from 'child_process';
+import { readFileSync, existsSync } from 'fs';
 import { writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { tmpdir, homedir } from 'os';
+import { join, resolve } from 'path';
 import { promisify } from 'util';
 import type { RequestHandler } from './$types';
 import type { JiraDetail } from '$lib/types';
+import { getConfig, type TerminalChoice } from '$lib/config';
 
 const execAsync = promisify(exec);
+
+function resolveBasePath(basePath: string): string {
+	if (basePath.startsWith('~/')) return basePath.replace('~', homedir());
+	if (basePath.startsWith('/')) return basePath;
+	return resolve(process.cwd(), basePath);
+}
+
+function resolvePromptText(promptKey: string): string {
+	const { claudePrompt } = getConfig();
+	const entry = claudePrompt.prompts[promptKey];
+	if (!entry) return '';
+	if (entry.type === 'text') return entry.data;
+	const basePath = resolveBasePath(claudePrompt.basePath);
+	const resolved = entry.data.replace('$basePath', basePath);
+	if (!existsSync(resolved)) throw new Error(`Prompt file not found: ${resolved}`);
+	return readFileSync(resolved, 'utf-8').trim();
+}
 
 function stripHtml(html: string): string {
 	return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function buildPrompt(key: string, detail: JiraDetail): string {
+function buildPrompt(key: string, detail: JiraDetail, preamble: string): string {
 	const description = stripHtml(detail.description);
 	const lines: string[] = [
-		"Here is context for a Jira ticket I'm working on. Help me think through it.",
+		preamble,
 		'',
 		`Jira work item ${key}: ${detail.summary}`,
 		'',
 		`Type: ${detail.issuetype} | Status: ${detail.status} | Priority: ${detail.priority ?? 'None'}`,
-		`Assignee: ${detail.assignee ?? 'Unassigned'} | Reporter: ${detail.reporter ?? 'Unknown'}`,
+		`Assignee: ${detail.assignee ?? 'Unassigned'} | Reporter: ${detail.reporter ?? 'Unknown'}`
 	];
 
 	if (detail.labels.length > 0) {
@@ -41,7 +60,7 @@ function buildPrompt(key: string, detail: JiraDetail): string {
 	if (recentComments.length > 0) {
 		lines.push(
 			'',
-			`Recent comments (showing last ${recentComments.length} of ${detail.comments.length}):`,
+			`Recent comments (showing last ${recentComments.length} of ${detail.comments.length}):`
 		);
 		for (const c of recentComments) {
 			const body = c.body.length > 300 ? c.body.slice(0, 300) + '…' : c.body;
@@ -52,37 +71,87 @@ function buildPrompt(key: string, detail: JiraDetail): string {
 	return lines.join('\n');
 }
 
+function buildAppleScript(
+	terminalChoice: TerminalChoice,
+	shell: string,
+	profile: string,
+	scriptFile: string
+): string {
+	const command = `${shell} ${scriptFile}`;
+
+	if (terminalChoice === 'iTerm2') {
+		return [
+			'tell application "iTerm2"',
+			`  create window with profile "${profile}" command "${command}"`,
+			'end tell'
+		].join('\n');
+	}
+
+	return [
+		'tell application "Terminal" to activate',
+		`tell application "Terminal" to do script "${command}"`
+	].join('\n');
+}
+
 export const POST: RequestHandler = async ({ request, fetch: kitFetch }) => {
 	let key: string;
+	let repoPath: string;
+	let promptKey: string | undefined;
+	let promptText: string | undefined;
 	try {
-		({ key } = await request.json());
+		({ key, repoPath, promptKey, promptText } = await request.json());
 	} catch {
 		return json({ ok: false, error: 'Invalid request body' }, { status: 400 });
 	}
 
-	const detailRes = await kitFetch(`/api/jira/issues/${key}/detail`);
-	if (!detailRes.ok) {
-		const errData = await detailRes.json().catch(() => ({}));
-		return json(
-			{ ok: false, error: errData.error ?? `Failed to fetch detail (${detailRes.status})` },
-			{ status: 502 },
-		);
+	let prompt: string;
+	if (promptText !== undefined) {
+		prompt = promptText;
+	} else {
+		if (!promptKey) {
+			return json({ ok: false, error: 'Missing promptKey' }, { status: 400 });
+		}
+		const detailRes = await kitFetch(`/api/jira/issues/${key}/detail`);
+		if (!detailRes.ok) {
+			const errData = await detailRes.json().catch(() => ({}));
+			return json(
+				{ ok: false, error: errData.error ?? `Failed to fetch detail (${detailRes.status})` },
+				{ status: 502 }
+			);
+		}
+		const detail: JiraDetail = await detailRes.json();
+		let preamble: string;
+		try {
+			preamble = resolvePromptText(promptKey);
+		} catch (e) {
+			return json({ ok: false, error: (e as Error).message }, { status: 422 });
+		}
+		prompt = buildPrompt(key, detail, preamble);
 	}
 
-	const detail: JiraDetail = await detailRes.json();
-	const prompt = buildPrompt(key, detail);
+	const { terminal } = getConfig();
+	const { terminalChoice, terminalConfigs } = terminal;
+	const termConfig = terminalConfigs[terminalChoice];
+	const { shell } = termConfig;
+	const profile = 'profile' in termConfig ? termConfig.profile : '';
 
 	const promptFile = join(tmpdir(), `claude-dashboard-${key}.txt`);
 	const scriptFile = join(tmpdir(), `claude-dashboard-${key}.sh`);
+	const appleScriptFile = join(tmpdir(), `claude-dashboard-${key}.applescript`);
+
+	const appleScript = buildAppleScript(terminalChoice, shell, profile, scriptFile);
 
 	await Promise.all([
 		writeFile(promptFile, prompt, 'utf8'),
-		writeFile(scriptFile, `#!/bin/zsh\nunset CLAUDECODE\nclaude "$(cat '${promptFile}')"\n`, 'utf8'),
+		writeFile(
+			scriptFile,
+			`cd "${repoPath}"\nunset CLAUDECODE\nclaude "$(cat '${promptFile}')"\n`,
+			'utf8'
+		),
+		writeFile(appleScriptFile, appleScript, 'utf8')
 	]);
 
-	await execAsync(
-		`osascript -e 'tell application "Terminal" to activate' -e 'tell application "Terminal" to do script "zsh ${scriptFile}"'`,
-	);
+	await execAsync(`osascript "${appleScriptFile}"`);
 
 	return json({ ok: true });
 };

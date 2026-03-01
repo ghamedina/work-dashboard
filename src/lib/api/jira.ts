@@ -14,7 +14,8 @@ interface JiraSearchResponse {
 }
 
 export async function fetchJiraWorkItems(config: DashboardConfig): Promise<JiraWorkItem[]> {
-	const jql = `assignee = currentUser() AND project = ${config.jira.projectKey} AND status not in (Done, Closed, Resolved)`;
+	const projectList = config.jira.projectKeys.join(', ');
+	const jql = `assignee = currentUser() AND project in (${projectList}) AND status not in (Done, Closed, Resolved)`;
 	const fields = 'key,summary,status';
 
 	const url = `${config.jira.baseUrl}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&fields=${fields}`;

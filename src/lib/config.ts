@@ -3,11 +3,13 @@ import { join } from 'path';
 import { parse } from 'yaml';
 import { JIRA_TOKEN, GITLAB_TOKEN } from '$env/static/private';
 
+export type TerminalChoice = 'Terminal' | 'iTerm2';
+
 interface YamlSettings {
 	jira?: {
 		baseUrl?: string;
 		email?: string;
-		projectKey?: string;
+		projectKeys?: string[];
 	};
 	gitlab?: {
 		baseUrl?: string;
@@ -18,52 +20,47 @@ interface YamlSettings {
 	amplitude?: {
 		baseUrl?: string;
 	};
-}
-
-function deepMerge(base: YamlSettings, override: YamlSettings): YamlSettings {
-	const result = { ...base } as Record<string, unknown>;
-	for (const [key, val] of Object.entries(override ?? {})) {
-		result[key] =
-			val && typeof val === 'object' && !Array.isArray(val)
-				? deepMerge((result[key] as YamlSettings) ?? {}, val as YamlSettings)
-				: val;
-	}
-	return result as YamlSettings;
+	claudePrompt?: {
+		default?: string;
+		basePath?: string;
+		prompts?: Record<string, { type: 'path' | 'text'; data: string }>;
+	};
+	repoPath?: {
+		default?: string;
+		repoPaths?: string[];
+	};
+	terminal?: {
+		terminalChoice?: TerminalChoice;
+		terminalConfigs?: {
+			Terminal?: { shell: string };
+			iTerm2?: { shell: string; profile: string };
+		};
+	};
 }
 
 function loadSettings(): YamlSettings {
-	const defaults = parse(
-		readFileSync(join(process.cwd(), 'settings.default.yml'), 'utf-8')
-	) as YamlSettings;
-
-	let user: YamlSettings = {};
+	let settings: YamlSettings;
 	try {
-		user = parse(
-			readFileSync(join(process.cwd(), 'settings.user.yml'), 'utf-8')
+		settings = parse(
+			readFileSync(join(process.cwd(), 'settings.yml'), 'utf-8')
 		) as YamlSettings;
 	} catch {
-		throw new Error(
-			'settings.user.yml not found — copy settings.user.yml.example and fill in required fields'
-		);
+		throw new Error('settings.yml not found — copy settings.yml.example and fill in required fields');
 	}
 
-	const merged = deepMerge(defaults, user);
+	if (!settings.jira?.email) throw new Error('settings.yml: jira.email is required');
+	if (!settings.gitlab?.authorUsername)
+		throw new Error('settings.yml: gitlab.authorUsername is required');
 
-	if (!merged.jira?.email) throw new Error('settings.user.yml: jira.email is required');
-	if (!merged.gitlab?.authorUsername)
-		throw new Error('settings.user.yml: gitlab.authorUsername is required');
-
-	return merged;
+	return settings;
 }
-
-const settings = loadSettings();
 
 export interface DashboardConfig {
 	jira: {
 		baseUrl: string;
 		email: string;
 		apiToken: string;
-		projectKey: string;
+		projectKeys: string[];
 	};
 	gitlab: {
 		baseUrl: string;
@@ -75,15 +72,32 @@ export interface DashboardConfig {
 	amplitude: {
 		baseUrl: string;
 	};
+	claudePrompt: {
+		default: string;
+		basePath: string;
+		prompts: Record<string, { type: 'path' | 'text'; data: string }>;
+	};
+	repoPath: {
+		default: string;
+		repoPaths: string[];
+	};
+	terminal: {
+		terminalChoice: TerminalChoice;
+		terminalConfigs: {
+			Terminal: { shell: string };
+			iTerm2: { shell: string; profile: string };
+		};
+	};
 }
 
 export function getConfig(): DashboardConfig {
+	const settings = loadSettings();
 	return {
 		jira: {
 			baseUrl: settings.jira!.baseUrl!,
 			email: settings.jira!.email!,
 			apiToken: JIRA_TOKEN,
-			projectKey: settings.jira!.projectKey!
+			projectKeys: settings.jira!.projectKeys!
 		},
 		gitlab: {
 			baseUrl: settings.gitlab!.baseUrl!,
@@ -94,6 +108,22 @@ export function getConfig(): DashboardConfig {
 		},
 		amplitude: {
 			baseUrl: settings.amplitude!.baseUrl!
+		},
+		claudePrompt: {
+			default: settings.claudePrompt!.default!,
+			basePath: settings.claudePrompt!.basePath!,
+			prompts: settings.claudePrompt!.prompts!
+		},
+		repoPath: {
+			default: settings.repoPath!.default!,
+			repoPaths: settings.repoPath!.repoPaths!
+		},
+		terminal: {
+			terminalChoice: settings.terminal!.terminalChoice!,
+			terminalConfigs: {
+				Terminal: settings.terminal!.terminalConfigs!.Terminal!,
+				iTerm2: settings.terminal!.terminalConfigs!.iTerm2!
+			}
 		}
 	};
 }
