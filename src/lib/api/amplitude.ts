@@ -1,14 +1,12 @@
 import type { AmplitudeFlag, AmplitudeTargetSegment } from '$lib/types';
 
-const AMPLITUDE_BASE = 'https://experiment.amplitude.com/api/1';
-
-export async function fetchAllFlags(apiKey: string): Promise<AmplitudeFlag[]> {
+export async function fetchAllFlags(apiKey: string, baseUrl: string): Promise<AmplitudeFlag[]> {
 	const allFlags: AmplitudeFlag[] = [];
 	let cursor: string | null = null;
 
 	do {
 		const url =
-			`${AMPLITUDE_BASE}/flags?limit=1000` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+			`${baseUrl}/flags?limit=1000` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
 		const res = await fetch(url, {
 			headers: {
 				Accept: 'application/json',
@@ -26,8 +24,12 @@ export async function fetchAllFlags(apiKey: string): Promise<AmplitudeFlag[]> {
 	return allFlags;
 }
 
-export async function fetchFlagByKey(key: string, apiKey: string): Promise<AmplitudeFlag | null> {
-	const url = `${AMPLITUDE_BASE}/flags?key=${encodeURIComponent(key)}`;
+export async function fetchFlagByKey(
+	key: string,
+	apiKey: string,
+	baseUrl: string
+): Promise<AmplitudeFlag | null> {
+	const url = `${baseUrl}/flags?key=${encodeURIComponent(key)}`;
 	const res = await fetch(url, {
 		headers: {
 			Accept: 'application/json',
@@ -44,9 +46,10 @@ export async function fetchFlagByKey(key: string, apiKey: string): Promise<Ampli
 export async function patchFlagSegments(
 	flagId: string,
 	targetSegments: AmplitudeTargetSegment[],
-	apiKey: string
+	apiKey: string,
+	baseUrl: string
 ): Promise<void> {
-	const url = `${AMPLITUDE_BASE}/flags/${flagId}`;
+	const url = `${baseUrl}/flags/${flagId}`;
 	const res = await fetch(url, {
 		method: 'PATCH',
 		headers: {

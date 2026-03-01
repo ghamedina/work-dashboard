@@ -1,10 +1,11 @@
 import { json } from '@sveltejs/kit';
-import { JIRA_BASE_URL, JIRA_EMAIL, JIRA_TOKEN } from '$env/static/private';
 import type { RequestHandler } from './$types';
 import type { JiraDetail } from '$lib/types';
+import { getConfig } from '$lib/config';
 
 function authHeader(): string {
-	return 'Basic ' + btoa(`${JIRA_EMAIL}:${JIRA_TOKEN}`);
+	const { jira } = getConfig();
+	return 'Basic ' + btoa(`${jira.email}:${jira.apiToken}`);
 }
 
 interface JiraIssueLink {
@@ -21,12 +22,13 @@ interface JiraComment {
 
 export const GET: RequestHandler = async ({ params }) => {
 	const { key } = params;
+	const { jira } = getConfig();
 	const headers = { Authorization: authHeader() };
 
 	const fieldsParam = 'summary,description,status,assignee,reporter,priority,issuetype,labels,created,updated,issuelinks';
 	const [issueRes, commentsRes] = await Promise.all([
-		fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${key}?fields=${fieldsParam}&expand=renderedFields`, { headers }),
-		fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${key}/comment`, { headers })
+		fetch(`${jira.baseUrl}/rest/api/3/issue/${key}?fields=${fieldsParam}&expand=renderedFields`, { headers }),
+		fetch(`${jira.baseUrl}/rest/api/3/issue/${key}/comment`, { headers })
 	]);
 
 	if (!issueRes.ok) {
@@ -46,7 +48,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			key: linked.key,
 			summary: linked.fields.summary,
 			status: linked.fields.status.name,
-			url: `${JIRA_BASE_URL}/browse/${linked.key}`
+			url: `${jira.baseUrl}/browse/${linked.key}`
 		};
 	}).filter(Boolean) as JiraDetail['linkedIssues'];
 

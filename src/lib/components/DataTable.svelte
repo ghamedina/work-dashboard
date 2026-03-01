@@ -161,41 +161,50 @@
 	}
 
 	// Detail fetch (copy + expand share cache)
-	const detailCache = new Map<string, JiraDetail>();
-	type CopyState = 'idle' | 'loading' | 'done';
-	const copyStates = new Map<string, CopyState>();
-	let copyStateRevision = $state(0);
+	type ActionState = 'idle' | 'loading' | 'done';
+	let detailCache = $state<Record<string, JiraDetail>>({});
+	let copyStates = $state<Record<string, ActionState>>({});
+	let claudeStates = $state<Record<string, ActionState>>({});
 
 	async function fetchDetail(key: string): Promise<JiraDetail> {
-		if (detailCache.has(key)) return detailCache.get(key)!;
+		if (detailCache[key]) return detailCache[key];
 		const res = await fetch(`/api/jira/issues/${key}/detail`);
 		if (!res.ok) throw new Error(`HTTP ${res.status}`);
 		const data: JiraDetail = await res.json();
-		detailCache.set(key, data);
+		detailCache[key] = data;
 		return data;
 	}
 
 	async function handleCopy(key: string) {
-		copyStates.set(key, 'loading');
-		copyStateRevision++;
+		copyStates[key] = 'loading';
 		try {
 			const detail = await fetchDetail(key);
 			await navigator.clipboard.writeText(JSON.stringify(detail, null, 2));
-			copyStates.set(key, 'done');
-			copyStateRevision++;
-			setTimeout(() => {
-				copyStates.set(key, 'idle');
-				copyStateRevision++;
-			}, 3000);
+			copyStates[key] = 'done';
+			setTimeout(() => { copyStates[key] = 'idle'; }, 3000);
 		} catch {
-			copyStates.set(key, 'idle');
-			copyStateRevision++;
+			copyStates[key] = 'idle';
+		}
+	}
+
+	async function handleOpenClaude(key: string) {
+		claudeStates[key] = 'loading';
+		try {
+			const res = await fetch('/api/claude/open', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ key })
+			});
+			if (!res.ok) throw new Error();
+			claudeStates[key] = 'done';
+			setTimeout(() => { claudeStates[key] = 'idle'; }, 3000);
+		} catch {
+			claudeStates[key] = 'idle';
 		}
 	}
 
 	// Expand row state
 	let expandedKeys = $state(new Set<string>());
-	let expandRevision = $state(0);
 
 	async function toggleExpand(key: string) {
 		const next = new Set(expandedKeys);
@@ -203,11 +212,7 @@
 			next.delete(key);
 		} else {
 			next.add(key);
-			if (!detailCache.has(key)) {
-				fetchDetail(key).then(() => {
-					expandRevision++;
-				}).catch(() => {});
-			}
+			fetchDetail(key).catch(() => {});
 		}
 		expandedKeys = next;
 	}
@@ -288,23 +293,40 @@
 		</TableHeaderRow>
 		<tbody>
 			{#each localRows as row (row.jiraItem.key)}
-				{@const copyState = (copyStateRevision, copyStates.get(row.jiraItem.key) ?? 'idle')}
+				{@const copyState = copyStates[row.jiraItem.key] ?? 'idle'}
+				{@const claudeState = claudeStates[row.jiraItem.key] ?? 'idle'}
 				<TableBodyRow>
 					<td class="cell-action">
-						<button
-							class="action-btn"
-							onclick={() => handleCopy(row.jiraItem.key)}
-							disabled={copyState === 'loading'}
-							title="Copy issue detail to clipboard"
-						>
-							{#if copyState === 'loading'}
-								<span class="spinner-sm"></span>
-							{:else if copyState === 'done'}
-								<span class="copy-done">✓</span>
-							{:else}
-								⧉
-							{/if}
-						</button>
+						<div class="action-btns">
+							<button
+								class="action-btn"
+								onclick={() => handleCopy(row.jiraItem.key)}
+								disabled={copyState === 'loading'}
+								title="Copy issue detail to clipboard"
+							>
+								{#if copyState === 'loading'}
+									<span class="spinner-sm"></span>
+								{:else if copyState === 'done'}
+									<span class="copy-done">✓</span>
+								{:else}
+									⧉
+								{/if}
+							</button>
+							<button
+								class="action-btn"
+								onclick={() => handleOpenClaude(row.jiraItem.key)}
+								disabled={claudeState === 'loading'}
+								title="Open in Claude terminal session"
+							>
+								{#if claudeState === 'loading'}
+									<span class="spinner-sm"></span>
+								{:else if claudeState === 'done'}
+									<span class="copy-done">✓</span>
+								{:else}
+									✦
+								{/if}
+							</button>
+						</div>
 					</td>
 					<td>
 						<Button
@@ -395,7 +417,7 @@
 					{/if}
 				</TableBodyRow>
 				{#if expandedKeys.has(row.jiraItem.key)}
-					{@const detail = (expandRevision, detailCache.get(row.jiraItem.key))}
+					{@const detail = detailCache[row.jiraItem.key]}
 					<tr class="expand-row">
 						<td colspan={totalColumns} class="expand-cell">
 							{#if !detail}
@@ -544,13 +566,19 @@
 	}
 
 	.col-action {
-		width: 28px;
+		width: 54px;
 		padding: 0 4px;
 	}
 
 	.cell-action {
 		padding: 0 4px;
 		text-align: center;
+	}
+
+	.action-btns {
+		display: flex;
+		gap: 2px;
+		justify-content: center;
 	}
 
 	.action-btn {

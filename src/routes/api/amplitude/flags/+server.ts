@@ -1,6 +1,7 @@
 import { json } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
 import { fetchAllFlags } from "$lib/api/amplitude";
+import { getConfig } from "$lib/config";
 import type { AmplitudeFlag } from "$lib/types";
 
 let cachedFlags: AmplitudeFlag[] | null = null;
@@ -22,7 +23,8 @@ export async function GET() {
   }
 
   try {
-    cachedFlags = await fetchAllFlags(apiKey);
+    const { amplitude } = getConfig();
+    cachedFlags = await fetchAllFlags(apiKey, amplitude.baseUrl);
     cacheTime = now;
     return json(cachedFlags);
   } catch (err) {

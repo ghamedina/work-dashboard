@@ -1,0 +1,15 @@
+# Required — personal information
+jira:
+  email: your.email@company.com
+
+gitlab:
+  authorUsername: your.username
+
+# Optional — override any value from settings.default.yml
+# jira:
+#   baseUrl: https://your-instance.atlassian.net
+#   projectKey: REP
+# gitlab:
+#   baseUrl: https://gitlab.your-company.com
+#   projectId: 435
+#   repo: your-org/your-repo

@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
-import { JIRA_BASE_URL, JIRA_EMAIL, JIRA_TOKEN } from '$env/static/private';
 import type { RequestHandler } from './$types';
+import { getConfig } from '$lib/config';
 
 interface JiraTransition {
 	id: string;
@@ -13,14 +13,16 @@ interface JiraTransitionsResponse {
 }
 
 function authHeader(): string {
-	return 'Basic ' + btoa(`${JIRA_EMAIL}:${JIRA_TOKEN}`);
+	const { jira } = getConfig();
+	return 'Basic ' + btoa(`${jira.email}:${jira.apiToken}`);
 }
 
 export const GET: RequestHandler = async ({ params }) => {
 	const { key } = params;
+	const { jira } = getConfig();
 	const headers = { Authorization: authHeader() };
 
-	const res = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${key}/transitions`, { headers });
+	const res = await fetch(`${jira.baseUrl}/rest/api/3/issue/${key}/transitions`, { headers });
 
 	if (!res.ok) {
 		return json({ ok: false, error: `Jira API error ${res.status}` }, { status: 502 });
@@ -34,6 +36,7 @@ export const GET: RequestHandler = async ({ params }) => {
 
 export const PATCH: RequestHandler = async ({ params, request }) => {
 	const { key } = params;
+	const { jira } = getConfig();
 	const body = await request.json().catch(() => null);
 	const statusName: string | undefined = body?.statusName;
 
@@ -47,7 +50,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 	};
 
 	try {
-		const transitionsRes = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${key}/transitions`, {
+		const transitionsRes = await fetch(`${jira.baseUrl}/rest/api/3/issue/${key}/transitions`, {
 			headers
 		});
 
@@ -68,7 +71,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 			);
 		}
 
-		const updateRes = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${key}/transitions`, {
+		const updateRes = await fetch(`${jira.baseUrl}/rest/api/3/issue/${key}/transitions`, {
 			method: 'POST',
 			headers,
 			body: JSON.stringify({ transition: { id: match.id } })
