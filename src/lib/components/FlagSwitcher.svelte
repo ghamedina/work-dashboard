@@ -7,6 +7,12 @@
 	import TableHeaderRow from './TableHeaderRow.svelte';
   import Container from './Container.svelte';
 
+	interface Props {
+		amplitudeOrgSlug: string;
+	}
+
+	let { amplitudeOrgSlug }: Props = $props();
+
 	const STORAGE_KEY = 'flagSwitcherRows';
 
 	type PersistedRow = Pick<FlagSwitcherRowData, 'id' | 'flagKey' | 'segmentName' | 'email'>;
@@ -169,6 +175,7 @@
 					<FlagSwitcherRow
 						{row}
 						{flags}
+						{amplitudeOrgSlug}
 						onUpdate={updateRow}
 						onRemove={() => removeRow(row.id)}
 						onClone={cloneRow}

@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { getConfig } from '$lib/config';
 import { fetchJiraWorkItems } from '$lib/api/jira';
-import { fetchGitLabMRs, fetchCIPipelineStatus } from '$lib/api/gitlab';
+import { fetchGitLabMRs, fetchCIPipelineStatus, fetchGitLabBranches } from '$lib/api/gitlab';
 import type { DashboardRow, GitLabMR } from '$lib/types';
 
 type ApiResult<T> = { data: T; error: null } | { data: null; error: string };
@@ -48,14 +48,18 @@ export const load: PageServerLoad = () => {
 			return Promise.all(
 				jiraItems.map(async (jiraItem) => {
 					const mr = allMRs.find((m) => m.title.includes(jiraItem.key)) ?? null;
-					const ciStatus = mr ? await fetchCIPipelineStatus(config, mr.iid) : ('none' as const);
-					return { jiraItem, mr, ciStatus };
+					const [ciStatus, branches] = await Promise.all([
+						mr ? fetchCIPipelineStatus(config, mr.iid) : Promise.resolve('none' as const),
+						fetchGitLabBranches(config, jiraItem.key).catch(() => [] as string[])
+					]);
+					return { jiraItem, mr, ciStatus, branches };
 				})
 			);
 		})
 	);
 
 	return {
+		amplitudeOrgSlug: config.amplitude.orgSlug,
 		streamed: {
 			jiraStatus,
 			gitlabStatus,

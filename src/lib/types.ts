@@ -29,6 +29,7 @@ export interface DashboardRow {
 	jiraItem: JiraWorkItem;
 	mr: GitLabMR | null;
 	ciStatus: CIPipelineStatus;
+	branches: string[];
 }
 
 export interface AmplitudeSegmentCondition {

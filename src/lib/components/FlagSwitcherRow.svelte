@@ -9,12 +9,13 @@
 	interface Props {
 		row: FlagSwitcherRowData;
 		flags: AmplitudeFlag[];
+		amplitudeOrgSlug: string;
 		onUpdate: (updated: FlagSwitcherRowData) => void;
 		onRemove: () => void;
 		onClone: (row: FlagSwitcherRowData) => void;
 	}
 
-	let { row, flags, onUpdate, onRemove, onClone }: Props = $props();
+	let { row, flags, amplitudeOrgSlug, onUpdate, onRemove, onClone }: Props = $props();
 
 	let flagKey = $state(untrack(() => row.flagKey));
 	let segmentName = $state(untrack(() => row.segmentName));
@@ -217,7 +218,7 @@
 				ariaLabel="Open flag in Amplitude dashboard"
 				onclick={() =>
 					window.open(
-						`https://app.amplitude.com/experiment/housecall/${matchedFlag.projectId}/config/${matchedFlag.id}/configure`,
+						`https://app.amplitude.com/experiment/${amplitudeOrgSlug}/${matchedFlag.projectId}/config/${matchedFlag.id}/configure`,
 						'_blank',
 						'noopener,noreferrer'
 					)}

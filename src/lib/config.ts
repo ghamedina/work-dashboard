@@ -3,7 +3,7 @@ import { join } from 'path';
 import { parse } from 'yaml';
 import { JIRA_TOKEN, GITLAB_TOKEN } from '$env/static/private';
 
-export type TerminalChoice = 'Terminal' | 'iTerm2';
+export type TerminalChoice = 'Terminal' | 'iTerm2' | 'Warp';
 
 interface YamlSettings {
 	jira?: {
@@ -19,6 +19,7 @@ interface YamlSettings {
 	};
 	amplitude?: {
 		baseUrl?: string;
+		orgSlug?: string;
 	};
 	claudePrompt?: {
 		default?: string;
@@ -34,6 +35,7 @@ interface YamlSettings {
 		terminalConfigs?: {
 			Terminal?: { shell: string };
 			iTerm2?: { shell: string; profile: string };
+			Warp?: { shell: string };
 		};
 	};
 }
@@ -71,6 +73,7 @@ export interface DashboardConfig {
 	};
 	amplitude: {
 		baseUrl: string;
+		orgSlug: string;
 	};
 	claudePrompt: {
 		default: string;
@@ -86,6 +89,7 @@ export interface DashboardConfig {
 		terminalConfigs: {
 			Terminal: { shell: string };
 			iTerm2: { shell: string; profile: string };
+			Warp: { shell: string };
 		};
 	};
 }
@@ -107,7 +111,8 @@ export function getConfig(): DashboardConfig {
 			authorUsername: settings.gitlab!.authorUsername!
 		},
 		amplitude: {
-			baseUrl: settings.amplitude!.baseUrl!
+			baseUrl: settings.amplitude!.baseUrl!,
+			orgSlug: settings.amplitude?.orgSlug ?? ''
 		},
 		claudePrompt: {
 			default: settings.claudePrompt!.default!,
@@ -122,7 +127,8 @@ export function getConfig(): DashboardConfig {
 			terminalChoice: settings.terminal!.terminalChoice!,
 			terminalConfigs: {
 				Terminal: settings.terminal!.terminalConfigs!.Terminal!,
-				iTerm2: settings.terminal!.terminalConfigs!.iTerm2!
+				iTerm2: settings.terminal!.terminalConfigs!.iTerm2!,
+				Warp: settings.terminal!.terminalConfigs!.Warp ?? { shell: 'zsh' }
 			}
 		}
 	};

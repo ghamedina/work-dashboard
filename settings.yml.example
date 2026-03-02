@@ -1,43 +1,84 @@
+# ─── Jira ─────────────────────────────────────────────────────────────────────
+# Connection settings for your Jira instance.
+# Your API token and email go in .env — these are non-secret settings only.
 jira:
-  email: your.email@company.com
-  baseUrl: https://your-instance.atlassian.net
+  email: your.email@company.com            # Your Jira account email
+  baseUrl: https://your-company.atlassian.net  # Jira cloud base URL
   projectKeys:
-    - YOUR_PROJECT_KEY
+    - YOUR_PROJECT_KEY                     # Add one or more Jira project keys prefixes (REP, DSTM, etc)
+    # - ANOTHER_KEY                        # Multiple keys are supported
 
+# ─── GitLab ───────────────────────────────────────────────────────────────────
+# Connection settings for your GitLab instance.
+# Your token goes in .env — these are non-secret settings only.
 gitlab:
-  authorUsername: your.username
-  baseUrl: https://gitlab.com
-  projectId: 0
-  repo: your-org/your-repo
+  authorUsername: your.username            # Your GitLab username (filters MRs to yours)
+  baseUrl: https://gitlab.your-company.com # GitLab base URL (self-hosted: https://gitlab.yourcompany.com)
+  projectId: 0                             # Numeric project ID (found in project Settings → General)
+  repo: your-org/your-repo                 # GitLab project path (org/repo-name)
 
+# ─── Amplitude ────────────────────────────────────────────────────────────────
+# Base URL for the Amplitude Experiment Management API.
+# You generally don't need to change this.
 amplitude:
   baseUrl: https://experiment.amplitude.com/api/1
+  orgSlug: your-amplitude-org-slug          # Found in your Amplitude dashboard URL
 
+# ─── Claude Launcher ──────────────────────────────────────────────────────────
+# Configures the "Open in Claude" button on each Jira row.
+# Clicking it opens a new terminal window running `claude` in the selected repo,
+# pre-loaded with a prompt that includes the Jira ticket details.
 claudePrompt:
-  default: basic
-  basePath: ~/                    # base directory for path-type prompts
+  default: basic                           # Which prompt to use by default (must match a key below)
+  basePath: ~/                             # Base directory used when resolving path-type prompts
+
   prompts:
+    # text-type: the prompt text is written directly here
     basic:
       type: text
       data: "Here is context for a Jira ticket I'm working on. Help me think through it."
+
+    # Uncomment and customize to add more prompts.
+    # They appear in a dropdown next to the "Open in Claude" button.
+
     # bugfix:
-    #   type: path
-    #   data: $basePath/bug-workflow.md        # resolves $basePath → basePath value
+    #   type: text
+    #   data: "Explore this bug in the codebase, identify the root cause, and make a plan for fixing it:"
+
     # explore:
     #   type: text
-    #   data: "Explore this issue in the codebase and make a plan for fixing it:"
+    #   data: "Explore this issue in the codebase and make a plan for implementing it:"
 
+    # path-type: reads prompt text from a markdown file on disk.
+    # $basePath is replaced with the basePath value above.
+    # refactor:
+    #   type: path
+    #   data: $basePath/my-prompts/refactor-workflow.md
+
+# ─── Repo Picker ──────────────────────────────────────────────────────────────
+# Controls the repo dropdown in the Claude launcher.
+# The selected path becomes the working directory for the `claude` command.
 repoPath:
-  default: ~/dev/my-project       # pre-selected path
-  repoPaths:
-    - ~/dev/*                     # expands to all subfolders in ~/dev/
-    - ~/projects/specific-repo    # literal path
+  default: ~/dev/my-project                # Pre-selected repo path when the picker opens
 
+  repoPaths:
+    - ~/dev/*                              # Glob: expands to all subdirectories in ~/dev/
+    - ~/projects/specific-repo            # Literal path: adds a single repo directly
+    # - ~/work/*                           # Add as many globs or literal paths as you like
+
+# ─── Terminal ─────────────────────────────────────────────────────────────────
+# Which terminal app to launch Claude in, and how to configure it.
+# Supported: Terminal (macOS built-in), iTerm2, or Warp
 terminal:
-  terminalChoice: Terminal        # Terminal or iTerm2
+  terminalChoice: Warp                     # "Terminal", "iTerm2", or "Warp"
+
   terminalConfigs:
     Terminal:
-      shell: zsh
+      shell: zsh                           # Shell to run inside Terminal (zsh, bash, etc.)
+
     iTerm2:
-      shell: zsh
-      profile: Default
+      shell: zsh                           # Shell to run inside iTerm2
+      profile: Default                     # iTerm2 profile name to use for the new window
+
+    Warp:
+      shell: zsh                           # Shell to run inside Warp (zsh, bash, etc.)

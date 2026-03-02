@@ -11,6 +11,10 @@ import { getConfig, type TerminalChoice } from '$lib/config';
 
 const execAsync = promisify(exec);
 
+function shellQuote(value: string): string {
+	return "'" + value.replace(/'/g, "'\\''") + "'";
+}
+
 function resolveBasePath(basePath: string): string {
 	if (basePath.startsWith('~/')) return basePath.replace('~', homedir());
 	if (basePath.startsWith('/')) return basePath;
@@ -87,6 +91,21 @@ function buildAppleScript(
 		].join('\n');
 	}
 
+	if (terminalChoice === 'Warp') {
+		return [
+			'tell application "Warp" to activate',
+			'delay 0.5',
+			'tell application "System Events"',
+			'  tell process "Warp"',
+			'    keystroke "n" using command down',
+			'    delay 0.5',
+			`    keystroke ${JSON.stringify(command)}`,
+			'    key code 36',
+			'  end tell',
+			'end tell'
+		].join('\n');
+	}
+
 	return [
 		'tell application "Terminal" to activate',
 		`tell application "Terminal" to do script "${command}"`
@@ -145,7 +164,7 @@ export const POST: RequestHandler = async ({ request, fetch: kitFetch }) => {
 		writeFile(promptFile, prompt, 'utf8'),
 		writeFile(
 			scriptFile,
-			`cd "${repoPath}"\nunset CLAUDECODE\nclaude "$(cat '${promptFile}')"\n`,
+			`cd ${shellQuote(repoPath)}\nunset CLAUDECODE\nclaude "$(cat ${shellQuote(promptFile)})"\n`,
 			'utf8'
 		),
 		writeFile(appleScriptFile, appleScript, 'utf8')

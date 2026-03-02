@@ -188,11 +188,40 @@
 		}
 	}
 
+	// Branch column state
+	let selectedBranches = $state<Record<string, string>>({});
+	let activeBranchKey = $state<string | null>(null);
+	let branchAnchor = $state<HTMLElement | null>(null);
+
+	$effect(() => {
+		try {
+			const stored = localStorage.getItem('dashboard-selected-branches');
+			if (stored) selectedBranches = JSON.parse(stored) as Record<string, string>;
+		} catch {}
+	});
+
+	function getSelectedBranch(row: DashboardRow): string | null {
+		return selectedBranches[row.jiraItem.key] ?? row.branches[0] ?? null;
+	}
+
+	function selectBranch(jiraKey: string, branch: string) {
+		selectedBranches = { ...selectedBranches, [jiraKey]: branch };
+		activeBranchKey = null;
+		try {
+			localStorage.setItem('dashboard-selected-branches', JSON.stringify(selectedBranches));
+		} catch {}
+	}
+
 	let claudePickerOpen = $state(false);
 	let claudePickerKey = $state('');
+	let claudePickerBranch = $state('');
+	let claudePickerBranches = $state<string[]>([]);
 
 	function handleOpenClaude(key: string) {
 		claudePickerKey = key;
+		const row = localRows.find((r) => r.jiraItem.key === key);
+		claudePickerBranches = row?.branches ?? [];
+		claudePickerBranch = selectedBranches[key] ?? row?.branches[0] ?? '';
 		claudePickerOpen = true;
 	}
 
@@ -218,7 +247,7 @@
 		expandedKeys = next;
 	}
 
-	let totalColumns = $derived(mode === 'summary' ? 6 : 8);
+	let totalColumns = $derived(mode === 'summary' ? 7 : 9);
 
 	// Comments modal state
 	let modalOpen = $state(false);
@@ -291,6 +320,7 @@
 				<th>CI</th>
 				<th class="col-comments">Comments</th>
 			{/if}
+			<th class="col-branch">Branch</th>
 		</TableHeaderRow>
 		<tbody>
 			{#each localRows as row (row.jiraItem.key)}
@@ -416,6 +446,39 @@
 							{/if}
 						</td>
 					{/if}
+					<td class="col-branch">
+						{#if getSelectedBranch(row) !== null}
+							{@const selectedBranch = getSelectedBranch(row)!}
+							{@const extraCount = row.branches.length - 1}
+							<div class="branch-cell">
+								{#if row.branches.length > 1}
+									<button
+										class="badge badge-gray badge-btn branch-badge"
+										onclick={(e) => {
+											if (activeBranchKey === row.jiraItem.key) {
+												activeBranchKey = null;
+											} else {
+												branchAnchor = e.currentTarget as HTMLElement;
+												activeBranchKey = row.jiraItem.key;
+											}
+										}}
+									>{selectedBranch}</button>
+									<span class="branch-extra">+{extraCount}</span>
+								{:else}
+									<span class="badge badge-gray branch-badge">{selectedBranch}</span>
+								{/if}
+								<DropdownMenu
+									open={activeBranchKey === row.jiraItem.key}
+									anchor={activeBranchKey === row.jiraItem.key ? (branchAnchor ?? undefined) : undefined}
+									items={row.branches.map((b) => ({ label: b, value: b }))}
+									onSelect={(value) => { if (value) selectBranch(row.jiraItem.key, value); }}
+									onClose={() => (activeBranchKey = null)}
+								/>
+							</div>
+						{:else}
+							<span class="empty">—</span>
+						{/if}
+					</td>
 				</TableBodyRow>
 				{#if expandedKeys.has(row.jiraItem.key)}
 					{@const detail = detailCache[row.jiraItem.key]}
@@ -461,7 +524,7 @@
 	</Table>
 </div>
 
-<ClaudePicker bind:open={claudePickerOpen} jiraKey={claudePickerKey} onDone={handleClaudeDone} />
+<ClaudePicker bind:open={claudePickerOpen} jiraKey={claudePickerKey} selectedBranch={claudePickerBranch} branches={claudePickerBranches} onDone={handleClaudeDone} />
 
 <ModalContainer bind:open={modalOpen}>
 	{#snippet title()}
@@ -723,6 +786,32 @@
 
 	.col-comments {
 		text-align: center;
+	}
+
+	.col-branch {
+		max-width: 180px;
+	}
+
+	.branch-cell {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		position: relative;
+	}
+
+	.branch-badge {
+		max-width: 150px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		display: inline-block;
+		vertical-align: middle;
+	}
+
+	.branch-extra {
+		font-size: 11px;
+		color: var(--color-text-muted);
+		white-space: nowrap;
+		flex-shrink: 0;
 	}
 
 	.badge {

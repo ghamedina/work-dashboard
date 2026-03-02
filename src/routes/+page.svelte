@@ -43,7 +43,7 @@
 	{/await}
 </Container>
 
-<FlagSwitcher />
+<FlagSwitcher amplitudeOrgSlug={data.amplitudeOrgSlug} />
 
 <style>
 	.error-state {

@@ -1,9 +1,9 @@
 import { json } from '@sveltejs/kit';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import type { RequestHandler } from './$types';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export const POST: RequestHandler = async ({ request }) => {
 	let filePath: string;
@@ -17,6 +17,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ ok: false, error: 'Missing filePath' }, { status: 400 });
 	}
 
-	await execAsync(`code "${filePath}"`);
+	await execFileAsync('code', [filePath]);
 	return json({ ok: true });
 };

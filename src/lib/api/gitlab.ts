@@ -1,6 +1,10 @@
 import type { DashboardConfig } from '$lib/config';
 import type { CIPipelineStatus, GitLabMR } from '$lib/types';
 
+interface GitLabBranchResponse {
+	name: string;
+}
+
 interface GitLabMRResponse {
 	iid: number;
 	title: string;
@@ -45,6 +49,18 @@ async function fetchMRPage(url: string, headers: Record<string, string>): Promis
 	}
 
 	return response.json();
+}
+
+export async function fetchGitLabBranches(config: DashboardConfig, search: string): Promise<string[]> {
+	const url = `${config.gitlab.baseUrl}/api/v4/projects/${config.gitlab.projectId}/repository/branches?search=${encodeURIComponent(search)}&per_page=20`;
+	const response = await fetch(url, {
+		headers: { 'PRIVATE-TOKEN': config.gitlab.token }
+	});
+
+	if (!response.ok) return [];
+
+	const branches: GitLabBranchResponse[] = await response.json();
+	return branches.map((b) => b.name);
 }
 
 export async function fetchCIPipelineStatus(
