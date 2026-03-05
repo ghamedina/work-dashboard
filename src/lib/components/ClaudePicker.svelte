@@ -7,6 +7,18 @@
 		display: string;
 	}
 
+	interface WorktreeEntry {
+		full: string;
+		branch: string;
+		display: string;
+	}
+
+	interface WorktreeGroup {
+		repoFull: string;
+		repoDisplay: string;
+		worktrees: WorktreeEntry[];
+	}
+
 	interface Prompt {
 		key: string;
 		label: string;
@@ -26,7 +38,8 @@
 	let { open = $bindable(), jiraKey, selectedBranch = '', branches = [], onDone }: Props = $props();
 
 	type Step = 'repo' | 'prompt' | 'preview';
-	type BranchStrategy = 'current' | 'new-from-current' | 'new-from-master' | 'existing';
+	type BranchStrategy = 'current' | 'new-from-current' | 'new-from-master' | 'existing' | 'new-worktree';
+	type CommentsMode = 'override' | 'secondary' | 'exclude';
 
 	let step = $state<Step>('repo');
 	let repoPaths = $state<RepoPath[]>([]);
@@ -35,6 +48,9 @@
 	let defaultPromptKey = $state('');
 
 	let selectedRepo = $state<RepoPath | null>(null);
+	let worktreeGroups = $state<WorktreeGroup[]>([]);
+	let worktreeBasePaths = $state<{ full: string; display: string }[]>([]);
+	let selectedWorktreeEntry = $state<WorktreeEntry | null>(null);
 	let selectedPromptKey = $state('');
 	let previewText = $state('');
 	let previewLoading = $state(false);
@@ -48,12 +64,24 @@
 	let pickerBranchAnchor = $state<HTMLElement | null>(null);
 	let pickerBranchDropdownOpen = $state(false);
 
+	const selectedIsWorktreeBase = $derived(
+		!selectedWorktreeEntry && worktreeBasePaths.some((p) => p.full === selectedRepo?.full)
+	);
+
 	$effect(() => { pickerBranch = selectedBranch; });
 
 	let loading = $state(false);
 	let loadError = $state('');
 	let submitting = $state(false);
 	let loaded = $state(false);
+
+	let commentsMode = $state<CommentsMode>('override');
+
+	let flagChrome = $state(true);
+	let flagResume = $state(false);
+	let sessions = $state<{ id: string; summary: string; date: string }[]>([]);
+	let sessionsLoading = $state(false);
+	let selectedSessionId = $state('');
 
 	$effect(() => {
 		if (open && !loaded) {
@@ -65,12 +93,14 @@
 			])
 				.then(
 					([repoData, promptData]: [
-						{ paths: RepoPath[]; defaultPath: RepoPath },
+						{ paths: RepoPath[]; defaultPath: RepoPath; worktreeGroups: WorktreeGroup[]; worktreeBasePaths: { full: string; display: string }[] },
 						{ prompts: Prompt[]; default: string }
 					]) => {
 						repoPaths = repoData.paths;
 						defaultRepo = repoData.defaultPath;
 						selectedRepo = repoData.defaultPath;
+						worktreeGroups = repoData.worktreeGroups ?? [];
+						worktreeBasePaths = repoData.worktreeBasePaths ?? [];
 
 						prompts = promptData.prompts;
 						defaultPromptKey = promptData.default;
@@ -96,24 +126,69 @@
 			currentBranch = '';
 			branchStrategy = 'current';
 			pickerBranchDropdownOpen = false;
+			flagChrome = true;
+			flagResume = false;
+			sessions = [];
+			selectedSessionId = '';
+			commentsMode = 'override';
+			selectedWorktreeEntry = null;
 		}
 	});
+
+	async function loadSessions() {
+		if (!selectedRepo || sessionsLoading) return;
+		sessionsLoading = true;
+		try {
+			const res = await fetch(`/api/claude/sessions?repoPath=${encodeURIComponent(selectedRepo.full)}`);
+			const data: { sessions: { id: string; summary: string; date: string }[] } = await res.json();
+			sessions = data.sessions;
+			if (sessions.length > 0) selectedSessionId = sessions[0].id;
+		} catch {
+			sessions = [];
+		} finally {
+			sessionsLoading = false;
+		}
+	}
+
+	async function fetchPreviewText() {
+		if (!selectedPromptKey) return;
+		previewLoading = true;
+		previewError = '';
+		try {
+			const res = await fetch('/api/claude/preview', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ key: jiraKey, promptKey: selectedPromptKey, commentsMode })
+			});
+			if (res.ok) {
+				const data: { text: string } = await res.json();
+				previewText = data.text;
+			} else {
+				previewError = 'Failed to load prompt preview.';
+			}
+		} catch {
+			previewError = 'Failed to load prompt preview.';
+		} finally {
+			previewLoading = false;
+		}
+	}
 
 	async function goToPreview() {
 		if (!selectedPromptKey || !selectedRepo) return;
 		step = 'preview';
-		previewLoading = true;
-		branchLoading = true;
 		previewError = '';
 		currentBranch = '';
 		branchStrategy = 'current';
 
-		const [previewRes] = await Promise.allSettled([
-			fetch('/api/claude/preview', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ key: jiraKey, promptKey: selectedPromptKey })
-			}).then((r) => (r.ok ? r.json() : Promise.reject())),
+		if (selectedWorktreeEntry) {
+			currentBranch = selectedWorktreeEntry.branch;
+			await fetchPreviewText();
+			return;
+		}
+
+		branchLoading = true;
+		await Promise.allSettled([
+			fetchPreviewText(),
 			fetch(`/api/git/branch?repoPath=${encodeURIComponent(selectedRepo.full)}`)
 				.then((r) => (r.ok ? r.json() : Promise.reject()))
 				.then((data: { branch: string }) => {
@@ -126,13 +201,6 @@
 					branchLoading = false;
 				})
 		]);
-
-		if (previewRes.status === 'fulfilled') {
-			previewText = previewRes.value.text;
-		} else {
-			previewError = 'Failed to load prompt preview.';
-		}
-		previewLoading = false;
 	}
 
 	const branchAppendix = $derived.by(() => {
@@ -159,6 +227,20 @@
 				`Once the branch is created successfully, proceed with the work.`
 			);
 		}
+			if (branchStrategy === 'new-worktree') {
+			const repoName = selectedRepo?.full.split('/').pop() ?? 'repo';
+			return (
+				'\n---\n' +
+				`Before doing anything else, create a new git worktree for this work:\n\n` +
+				`1. Pick a short, descriptive branch name based on the Jira ticket key and summary (e.g. ${jiraKey}-short-description)\n` +
+				`2. Create the worktree as a sibling directory to this repo:\n\n` +
+				`   git worktree add ../${repoName}-<branch-name> -b <branch-name>\n\n` +
+				`3. Change your working directory to the new worktree. All subsequent work must happen inside this worktree — do not make changes in the original repo directory.\n` +
+				`4. Ask me: "The new worktree is ready. Should I install dependencies before starting work?" and wait for my answer before continuing.\n\n` +
+				`If the branch or directory name already exists, ask me what name to use before proceeding.\n` +
+				`If any git command fails or produces unexpected output, stop and ask me how to proceed before continuing.`
+			);
+		}
 		return (
 			'\n---\n' +
 			`Before doing anything else, update master and create a new branch from it:\n\n` +
@@ -177,11 +259,15 @@
 		if (!selectedRepo || !previewText || submitting) return;
 		submitting = true;
 		const finalPrompt = previewText + branchAppendix;
+		const claudeFlags = {
+			chrome: flagChrome,
+			resumeSessionId: flagResume && selectedSessionId ? selectedSessionId : undefined
+		};
 		try {
 			const res = await fetch('/api/claude/open', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ key: jiraKey, repoPath: selectedRepo.full, promptText: finalPrompt })
+				body: JSON.stringify({ key: jiraKey, repoPath: selectedRepo.full, promptText: finalPrompt, claudeFlags, commentsMode })
 			});
 			if (!res.ok) throw new Error();
 			open = false;
@@ -220,9 +306,9 @@
 					<li>
 						<button
 							class="option-btn"
-							class:selected={selectedRepo?.full === path.full}
+							class:selected={selectedRepo?.full === path.full && !selectedWorktreeEntry}
 							class:is-default={path.full === defaultRepo?.full}
-							onclick={() => (selectedRepo = path)}
+							onclick={() => { selectedRepo = path; selectedWorktreeEntry = null; }}
 						>
 							<span class="option-text">{path.display}</span>
 							{#if path.full === defaultRepo?.full}
@@ -232,6 +318,40 @@
 					</li>
 				{/each}
 			</ul>
+			{#if worktreeGroups.length > 0 || worktreeBasePaths.length > 0}
+				<p class="worktrees-label">Worktrees</p>
+				<ul class="option-list">
+					{#each worktreeBasePaths as base (base.full)}
+						<li>
+							<button
+								class="option-btn"
+								class:selected={selectedRepo?.full === base.full && !selectedWorktreeEntry}
+								onclick={() => { selectedRepo = base; selectedWorktreeEntry = null; }}
+							>
+								<span class="option-text">{base.display}</span>
+								<span class="tag tag-worktree-base">base</span>
+							</button>
+						</li>
+					{/each}
+					{#each worktreeGroups as group (group.repoFull)}
+						{#each group.worktrees as wt (wt.full)}
+							<li>
+								<button
+									class="option-btn"
+									class:selected={selectedWorktreeEntry?.full === wt.full}
+									onclick={() => {
+										selectedRepo = { full: wt.full, display: wt.display };
+										selectedWorktreeEntry = wt;
+									}}
+								>
+									<span class="option-text">{group.repoDisplay}: {wt.branch}</span>
+									<span class="tag tag-worktree">worktree</span>
+								</button>
+							</li>
+						{/each}
+					{/each}
+				</ul>
+			{/if}
 			<div class="footer">
 				<button class="primary-btn" disabled={!selectedRepo} onclick={() => (step = 'prompt')}>
 					Next →
@@ -313,29 +433,98 @@
 					</div>
 				{/if}
 				<div class="strategy-buttons">
-					<button
-						class="strategy-btn"
-						class:active={branchStrategy === 'current'}
-						onclick={() => (branchStrategy = 'current')}
-					>Work in this branch</button>
-					<button
-						class="strategy-btn"
-						class:active={branchStrategy === 'new-from-current'}
-						onclick={() => (branchStrategy = 'new-from-current')}
-					>New branch from here</button>
-					<button
-						class="strategy-btn"
-						class:active={branchStrategy === 'new-from-master'}
-						onclick={() => (branchStrategy = 'new-from-master')}
-					>New branch from master</button>
-					{#if branches.length > 0}
+					{#if selectedWorktreeEntry}
+						<button class="strategy-btn active">Work in this worktree</button>
+					{:else}
+						{#if selectedIsWorktreeBase}
+							<button
+								class="strategy-btn"
+								class:active={branchStrategy === 'new-worktree'}
+								onclick={() => (branchStrategy = 'new-worktree')}
+							>New worktree</button>
+						{/if}
 						<button
 							class="strategy-btn"
-							class:active={branchStrategy === 'existing'}
-							onclick={() => (branchStrategy = 'existing')}
-						>Work in existing branch</button>
+							class:active={branchStrategy === 'current'}
+							onclick={() => (branchStrategy = 'current')}
+						>Work in this branch</button>
+						<button
+							class="strategy-btn"
+							class:active={branchStrategy === 'new-from-current'}
+							onclick={() => (branchStrategy = 'new-from-current')}
+						>New branch from here</button>
+						<button
+							class="strategy-btn"
+							class:active={branchStrategy === 'new-from-master'}
+							onclick={() => (branchStrategy = 'new-from-master')}
+						>New branch from master</button>
+						{#if branches.length > 0}
+							<button
+								class="strategy-btn"
+								class:active={branchStrategy === 'existing'}
+								onclick={() => (branchStrategy = 'existing')}
+							>Work in existing branch</button>
+						{/if}
 					{/if}
 				</div>
+			</div>
+			<div class="comments-section">
+				<span class="comments-label">Comments:</span>
+				<div class="comments-options">
+					<button
+						class="strategy-btn"
+						class:active={commentsMode === 'override'}
+						onclick={() => { commentsMode = 'override'; fetchPreviewText(); }}
+					>decisions override description</button>
+					<button
+						class="strategy-btn"
+						class:active={commentsMode === 'secondary'}
+						onclick={() => { commentsMode = 'secondary'; fetchPreviewText(); }}
+					>description is primary</button>
+					<button
+						class="strategy-btn"
+						class:active={commentsMode === 'exclude'}
+						onclick={() => { commentsMode = 'exclude'; fetchPreviewText(); }}
+					>exclude</button>
+				</div>
+			</div>
+			<div class="flags-section">
+				<span class="flags-label">Claude flags:</span>
+				<div class="flags-options">
+					<button
+						class="flag-btn"
+						class:active={flagChrome}
+						onclick={() => (flagChrome = !flagChrome)}
+					>chrome</button>
+					<button
+						class="flag-btn"
+						class:active={flagResume}
+						onclick={() => {
+							flagResume = !flagResume;
+							if (flagResume && sessions.length === 0) loadSessions();
+						}}
+					>resume conversation</button>
+				</div>
+				{#if flagResume}
+					<div class="sessions-list">
+						{#if sessionsLoading}
+							<p class="sessions-status">Loading sessions…</p>
+						{:else if sessions.length === 0}
+							<p class="sessions-status">No sessions found.</p>
+						{:else}
+							{#each sessions as session (session.id)}
+								<button
+									class="session-btn"
+									class:selected={selectedSessionId === session.id}
+									onclick={() => (selectedSessionId = session.id)}
+								>
+									<span class="session-date">{session.date}</span>
+									<span class="session-summary">{session.summary}</span>
+								</button>
+							{/each}
+						{/if}
+					</div>
+				{/if}
 			</div>
 			{#if previewLoading}
 				<p class="status">Building prompt…</p>
@@ -466,6 +655,25 @@
 	.tag-file {
 		background: var(--color-purple-muted);
 		color: var(--color-purple);
+	}
+
+	.tag-worktree {
+		background: color-mix(in srgb, var(--color-success, #16a34a) 12%, transparent);
+		color: var(--color-success, #16a34a);
+	}
+
+	.tag-worktree-base {
+		background: color-mix(in srgb, #2563eb 12%, transparent);
+		color: #2563eb;
+	}
+
+	.worktrees-label {
+		font-size: 11px;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-muted);
+		margin: 10px 0 4px;
 	}
 
 	.tag-file-btn {
@@ -684,5 +892,114 @@
 	.ghost-btn:hover {
 		background: var(--color-gray-muted);
 		color: var(--color-text);
+	}
+
+	.comments-section,
+	.flags-section {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		margin-bottom: 10px;
+	}
+
+	.comments-label,
+	.flags-label {
+		font-size: 11px;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-muted);
+	}
+
+	.comments-options,
+	.flags-options {
+		display: flex;
+		gap: 4px;
+		flex-wrap: wrap;
+	}
+
+	.flag-btn {
+		padding: 4px 10px;
+		font-family: monospace;
+		font-size: 12px;
+		background: none;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition: background 0.1s ease, border-color 0.1s ease, color 0.1s ease;
+	}
+
+	.flag-btn:hover {
+		background: var(--color-gray-muted);
+		color: var(--color-text);
+	}
+
+	.flag-btn.active {
+		background: var(--color-primary-muted);
+		border-color: var(--color-primary);
+		color: var(--color-primary);
+	}
+
+	.sessions-list {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding-left: 2px;
+	}
+
+	.sessions-status {
+		font-size: 12px;
+		color: var(--color-text-muted);
+		margin: 0;
+		font-style: italic;
+	}
+
+	.session-btn {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		padding: 5px 10px;
+		background: none;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		font-family: inherit;
+		font-size: 12px;
+		color: var(--color-text);
+		cursor: pointer;
+		text-align: left;
+		transition: background 0.1s ease, border-color 0.1s ease;
+		min-width: 0;
+	}
+
+	.session-btn:hover {
+		background: var(--color-gray-muted);
+	}
+
+	.session-btn.selected {
+		background: var(--color-primary-muted);
+		border-color: var(--color-primary);
+		color: var(--color-primary);
+	}
+
+	.session-date {
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--color-text-muted);
+		flex-shrink: 0;
+	}
+
+	.session-btn.selected .session-date {
+		color: var(--color-primary);
+		opacity: 0.8;
+	}
+
+	.session-summary {
+		font-family: monospace;
+		font-size: 11px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
 	}
 </style>

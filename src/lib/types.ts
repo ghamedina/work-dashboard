@@ -25,10 +25,19 @@ export type CIPipelineStatus =
 	| 'skipped'
 	| 'none';
 
+export interface UnifiedPR {
+	source: 'gitlab' | 'github';
+	id: number;
+	title: string;
+	state: 'open' | 'draft' | 'merged' | 'closed';
+	webUrl: string;
+	commentCount: number;
+	ciStatus: CIPipelineStatus;
+}
+
 export interface DashboardRow {
 	jiraItem: JiraWorkItem;
-	mr: GitLabMR | null;
-	ciStatus: CIPipelineStatus;
+	prs: UnifiedPR[];
 	branches: string[];
 }
 

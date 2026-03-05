@@ -8,9 +8,10 @@
 	interface Props {
 		jiraStatus: Promise<ApiResult<ApiStatus>>;
 		gitlabStatus: Promise<ApiResult<ApiStatus>>;
+		githubStatus?: Promise<ApiResult<ApiStatus | null>>;
 	}
 
-	let { jiraStatus, gitlabStatus }: Props = $props();
+	let { jiraStatus, gitlabStatus, githubStatus }: Props = $props();
 </script>
 
 <div class="loader">
@@ -54,6 +55,27 @@
 				</div>
 			{/if}
 		{/await}
+
+		{#if githubStatus}
+			{#await githubStatus}
+				<div class="status-line pending">
+					<span class="dot"></span>
+					Fetching GitHub PRs...
+				</div>
+			{:then result}
+				{#if result.data !== null}
+					<div class="status-line success">
+						<span class="icon">✓</span>
+						{result.data.count} GitHub {result.data.count === 1 ? 'PR' : 'PRs'}
+					</div>
+				{:else if result.error}
+					<div class="status-line error">
+						<span class="icon">✗</span>
+						Failed to fetch GitHub PRs
+					</div>
+				{/if}
+			{/await}
+		{/if}
 	</div>
 </div>
 

@@ -24,10 +24,25 @@ function resolvePromptText(promptKey: string): string {
 }
 
 function stripHtml(html: string): string {
-	return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+	return html
+		.replace(/<br\s*\/?>/gi, '\n')
+		.replace(/<\/?(p|div|li|h[1-6]|tr|blockquote|pre|ul|ol)[^>]*>/gi, '\n')
+		.replace(/<[^>]*>/g, '')
+		.replace(/&nbsp;/g, ' ')
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&amp;/g, '&')
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/\n[ \t]+/g, '\n')
+		.replace(/[ \t]+\n/g, '\n')
+		.replace(/\n{3,}/g, '\n\n')
+		.trim();
 }
 
-function buildPrompt(key: string, detail: JiraDetail, preamble: string): string {
+type CommentsMode = 'override' | 'secondary' | 'exclude';
+
+function buildPrompt(key: string, detail: JiraDetail, preamble: string, commentsMode: CommentsMode): string {
 	const description = stripHtml(detail.description);
 	const lines: string[] = [
 		preamble,
@@ -51,15 +66,23 @@ function buildPrompt(key: string, detail: JiraDetail, preamble: string): string 
 		}
 	}
 
-	const recentComments = detail.comments.slice(-3);
-	if (recentComments.length > 0) {
-		lines.push(
-			'',
-			`Recent comments (showing last ${recentComments.length} of ${detail.comments.length}):`
-		);
-		for (const c of recentComments) {
-			const body = c.body.length > 300 ? c.body.slice(0, 300) + '…' : c.body;
-			lines.push(`  ${c.author} (${c.created.slice(0, 10)}): ${body}`);
+	if (commentsMode !== 'exclude') {
+		const recentComments = detail.comments.slice(-3);
+		if (recentComments.length > 0) {
+			const commentNote = commentsMode === 'override'
+				? 'Note: Comments contain later discussions and decisions. Where a comment contradicts or refines the description, defer to the comment.'
+				: 'Note: The description above is the primary specification. Comments below provide additional context but do not override it.';
+			lines.push(
+				'',
+				commentNote,
+				'',
+				`Recent comments (showing last ${recentComments.length} of ${detail.comments.length}):`
+			);
+			for (const c of recentComments) {
+				const stripped = stripHtml(c.body);
+				const body = stripped.length > 300 ? stripped.slice(0, 300) + '…' : stripped;
+				lines.push(`  ${c.author} (${c.created.slice(0, 10)}): ${body}`);
+			}
 		}
 	}
 
@@ -69,8 +92,9 @@ function buildPrompt(key: string, detail: JiraDetail, preamble: string): string 
 export const POST: RequestHandler = async ({ request, fetch: kitFetch }) => {
 	let key: string;
 	let promptKey: string;
+	let commentsMode: CommentsMode = 'override';
 	try {
-		({ key, promptKey } = await request.json());
+		({ key, promptKey, commentsMode = 'override' } = await request.json());
 	} catch {
 		return json({ ok: false, error: 'Invalid request body' }, { status: 400 });
 	}
@@ -93,6 +117,6 @@ export const POST: RequestHandler = async ({ request, fetch: kitFetch }) => {
 		return json({ ok: false, error: (e as Error).message }, { status: 422 });
 	}
 
-	const text = buildPrompt(key, detail, preamble);
+	const text = buildPrompt(key, detail, preamble, commentsMode);
 	return json({ text });
 };

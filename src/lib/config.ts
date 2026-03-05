@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse } from 'yaml';
-import { JIRA_TOKEN, GITLAB_TOKEN } from '$env/static/private';
+import { JIRA_TOKEN, GITLAB_TOKEN, GITHUB_TOKEN } from '$env/static/private';
 
 export type TerminalChoice = 'Terminal' | 'iTerm2' | 'Warp';
 
@@ -17,6 +17,11 @@ interface YamlSettings {
 		repo?: string;
 		authorUsername?: string;
 	};
+	github?: {
+		owner?: string;
+		repo?: string;
+		authorUsername?: string;
+	};
 	amplitude?: {
 		baseUrl?: string;
 		orgSlug?: string;
@@ -28,7 +33,7 @@ interface YamlSettings {
 	};
 	repoPath?: {
 		default?: string;
-		repoPaths?: string[];
+		repoPaths?: (string | { worktrees: string[] })[];
 	};
 	terminal?: {
 		terminalChoice?: TerminalChoice;
@@ -71,6 +76,12 @@ export interface DashboardConfig {
 		repo: string;
 		authorUsername: string;
 	};
+	github: {
+		token: string;
+		owner: string;
+		repo: string;
+		authorUsername: string;
+	} | null;
 	amplitude: {
 		baseUrl: string;
 		orgSlug: string;
@@ -82,7 +93,7 @@ export interface DashboardConfig {
 	};
 	repoPath: {
 		default: string;
-		repoPaths: string[];
+		repoPaths: (string | { worktrees: string[] })[];
 	};
 	terminal: {
 		terminalChoice: TerminalChoice;
@@ -110,6 +121,14 @@ export function getConfig(): DashboardConfig {
 			repo: settings.gitlab!.repo!,
 			authorUsername: settings.gitlab!.authorUsername!
 		},
+		github: settings.github?.owner && settings.github?.repo && settings.github?.authorUsername
+			? {
+					token: GITHUB_TOKEN,
+					owner: settings.github.owner,
+					repo: settings.github.repo,
+					authorUsername: settings.github.authorUsername
+				}
+			: null,
 		amplitude: {
 			baseUrl: settings.amplitude!.baseUrl!,
 			orgSlug: settings.amplitude?.orgSlug ?? ''

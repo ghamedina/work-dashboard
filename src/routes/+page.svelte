@@ -29,7 +29,11 @@
 	<Controls bind:mode onReload={handleReload} />
 
 	{#await data.streamed.rows}
-		<Loader jiraStatus={data.streamed.jiraStatus} gitlabStatus={data.streamed.gitlabStatus} />
+		<Loader
+			jiraStatus={data.streamed.jiraStatus}
+			gitlabStatus={data.streamed.gitlabStatus}
+			githubStatus={data.githubConfigured ? data.streamed.githubStatus : undefined}
+		/>
 	{:then result}
 		{#if result.data !== null}
 			<DataTable rows={result.data} {mode} gitlabUnavailable={gitlabVpnError} />

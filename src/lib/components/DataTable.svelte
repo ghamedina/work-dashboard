@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { DashboardRow, RenderMode, CIPipelineStatus, MRComment, JiraDetail } from '$lib/types';
+	import type { DashboardRow, RenderMode, CIPipelineStatus, UnifiedPR, MRComment, JiraDetail } from '$lib/types';
 	import Table from './Table.svelte';
 	import TableHeaderRow from './TableHeaderRow.svelte';
 	import TableBodyRow from './TableBodyRow.svelte';
@@ -116,13 +116,12 @@
 		return truncateSummary(summary, maxLen);
 	}
 
-	function mrStatusLabel(row: DashboardRow): string {
-		if (!row.mr) return '—';
-		if (row.mr.draft) return 'Draft';
-		if (row.mr.state === 'opened') return 'Open';
-		if (row.mr.state === 'merged') return 'Merged';
-		if (row.mr.state === 'closed') return 'Closed';
-		return row.mr.state;
+	function prStatusLabel(pr: UnifiedPR): string {
+		if (pr.state === 'draft') return 'Draft';
+		if (pr.state === 'open') return 'Open';
+		if (pr.state === 'merged') return 'Merged';
+		if (pr.state === 'closed') return 'Closed';
+		return pr.state;
 	}
 
 	type BadgeVariant = 'primary' | 'success' | 'warning' | 'danger' | 'purple' | 'gray';
@@ -136,11 +135,10 @@
 		return 'gray';
 	}
 
-	function mrStatusVariant(row: DashboardRow): BadgeVariant {
-		if (!row.mr) return 'gray';
-		if (row.mr.draft) return 'gray';
-		if (row.mr.state === 'opened') return 'success';
-		if (row.mr.state === 'merged') return 'purple';
+	function prStatusVariant(pr: UnifiedPR): BadgeVariant {
+		if (pr.state === 'draft') return 'gray';
+		if (pr.state === 'open') return 'success';
+		if (pr.state === 'merged') return 'purple';
 		return 'gray';
 	}
 
@@ -157,11 +155,14 @@
 		return status.charAt(0).toUpperCase() + status.slice(1);
 	}
 
+	function prLabel(pr: UnifiedPR): string {
+		return pr.source === 'gitlab' ? `!${pr.id}` : `#${pr.id}`;
+	}
+
 	function openLink(url: string) {
 		window.open(url, '_blank', 'noopener,noreferrer');
 	}
 
-	// Detail fetch (copy + expand share cache)
 	type ActionState = 'idle' | 'loading' | 'done';
 	let detailCache = $state<Record<string, JiraDetail>>({});
 	let copyStates = $state<Record<string, ActionState>>({});
@@ -188,7 +189,6 @@
 		}
 	}
 
-	// Branch column state
 	let selectedBranches = $state<Record<string, string>>({});
 	let activeBranchKey = $state<string | null>(null);
 	let branchAnchor = $state<HTMLElement | null>(null);
@@ -233,7 +233,6 @@
 		}, 3000);
 	}
 
-	// Expand row state
 	let expandedKeys = $state(new Set<string>());
 
 	async function toggleExpand(key: string) {
@@ -247,41 +246,49 @@
 		expandedKeys = next;
 	}
 
-	let totalColumns = $derived(mode === 'summary' ? 7 : 9);
+	let totalColumns = $derived(mode === 'summary' ? 8 : 10);
 
-	// Comments modal state
+	// Comments modal — keyed by "{source}:{id}"
 	let modalOpen = $state(false);
-	let activeModalRow = $state<DashboardRow | null>(null);
+	let activeModalPR = $state<UnifiedPR | null>(null);
 	let commentsLoading = $state(false);
 	let commentsError = $state<string | null>(null);
 	let expandedCommentIds = $state(new Set<number>());
-	const commentsCache = new Map<number, MRComment[]>();
+	const commentsCache = new Map<string, MRComment[]>();
 
-	function activeComments(): MRComment[] | null {
-		if (!activeModalRow?.mr) return null;
-		return commentsCache.get(activeModalRow.mr.iid) ?? null;
+	function commentsCacheKey(pr: UnifiedPR): string {
+		return `${pr.source}:${pr.id}`;
 	}
 
-	async function openComments(row: DashboardRow) {
-		if (!row.mr) return;
-		activeModalRow = row;
+	function activeComments(): MRComment[] | null {
+		if (!activeModalPR) return null;
+		return commentsCache.get(commentsCacheKey(activeModalPR)) ?? null;
+	}
+
+	async function openComments(pr: UnifiedPR) {
+		if (pr.source === 'github') {
+			openLink(pr.webUrl);
+			return;
+		}
+
+		activeModalPR = pr;
 		expandedCommentIds = new Set();
 		commentsError = null;
 		modalOpen = true;
 
-		const { iid } = row.mr;
-		if (commentsCache.has(iid)) return;
+		const cacheKey = commentsCacheKey(pr);
+		if (commentsCache.has(cacheKey)) return;
 
 		commentsLoading = true;
 		try {
-			const params = new URLSearchParams({ mrWebUrl: row.mr.webUrl });
-			const res = await fetch(`/api/gitlab/mrs/${iid}/comments?${params}`);
+			const params = new URLSearchParams({ mrWebUrl: pr.webUrl });
+			const res = await fetch(`/api/gitlab/mrs/${pr.id}/comments?${params}`);
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
 				throw new Error(data.error ?? `HTTP ${res.status}`);
 			}
 			const comments: MRComment[] = await res.json();
-			commentsCache.set(iid, comments);
+			commentsCache.set(cacheKey, comments);
 		} catch (err) {
 			commentsError = err instanceof Error ? err.message : 'Failed to load comments';
 		} finally {
@@ -314,7 +321,8 @@
 			<th>Work Item</th>
 			<th class="col-summary">Summary</th>
 			<th>Status</th>
-			<th>MR</th>
+			<th class="col-source"></th>
+			<th>MR / PR</th>
 			<th>MR Status</th>
 			{#if mode !== 'summary'}
 				<th>CI</th>
@@ -326,8 +334,10 @@
 			{#each localRows as row (row.jiraItem.key)}
 				{@const copyState = copyStates[row.jiraItem.key] ?? 'idle'}
 				{@const claudeState = claudeStates[row.jiraItem.key] ?? 'idle'}
+				{@const rowCount = Math.max(row.prs.length, 1)}
+				{@const firstPR = row.prs[0] ?? null}
 				<TableBodyRow>
-					<td class="cell-action">
+					<td rowspan={rowCount} class="cell-action">
 						<div class="action-btns">
 							<button
 								class="action-btn"
@@ -359,14 +369,14 @@
 							</button>
 						</div>
 					</td>
-					<td>
+					<td rowspan={rowCount}>
 						<Button
 							variant="link"
 							label={row.jiraItem.key}
 							onclick={() => openLink(row.jiraItem.url)}
 						/>
 					</td>
-					<td class="col-summary">
+					<td rowspan={rowCount} class="col-summary">
 						<div class="summary-cell">
 							<button
 								class="expand-btn"
@@ -378,7 +388,7 @@
 							<span class="summary-text">{displaySummary(row.jiraItem.summary)}</span>
 						</div>
 					</td>
-					<td>
+					<td rowspan={rowCount}>
 						<div class="status-wrapper">
 							<button
 								class={`badge badge-${jiraStatusVariant(row.jiraItem.status)} badge-btn`}
@@ -404,49 +414,8 @@
 							onClose={() => (activeStatusKey = null)}
 						/>
 					</td>
-					<td>
-						{#if row.mr}
-							<Button
-								variant="link"
-								label={`!${row.mr.iid}`}
-								onclick={() => openLink(row.mr!.webUrl)}
-							/>
-						{:else}
-							<span class="empty">—</span>
-						{/if}
-					</td>
-					<td>
-						{#if row.mr}
-							<span class={`badge badge-${mrStatusVariant(row)}`}>
-								{mrStatusLabel(row)}
-							</span>
-						{:else}
-							<span class="empty">—</span>
-						{/if}
-					</td>
-					{#if mode !== 'summary'}
-						<td>
-							{#if row.ciStatus !== 'none'}
-								<span class={`badge badge-${ciVariant(row.ciStatus)}`}>
-									{ciLabel(row.ciStatus)}
-								</span>
-							{:else}
-								<span class="empty">—</span>
-							{/if}
-						</td>
-						<td class="col-comments">
-							{#if row.mr && row.mr.userNotesCount > 0}
-								<Button
-									variant="link"
-									label={String(row.mr.userNotesCount)}
-									onclick={() => openComments(row)}
-								/>
-							{:else}
-								<span class="empty">—</span>
-							{/if}
-						</td>
-					{/if}
-					<td class="col-branch">
+					{@render prCells(firstPR)}
+					<td rowspan={rowCount} class="col-branch">
 						{#if getSelectedBranch(row) !== null}
 							{@const selectedBranch = getSelectedBranch(row)!}
 							{@const extraCount = row.branches.length - 1}
@@ -480,6 +449,11 @@
 						{/if}
 					</td>
 				</TableBodyRow>
+				{#each row.prs.slice(1) as pr}
+					<tr class="body-row">
+						{@render prCells(pr)}
+					</tr>
+				{/each}
 				{#if expandedKeys.has(row.jiraItem.key)}
 					{@const detail = detailCache[row.jiraItem.key]}
 					<tr class="expand-row">
@@ -524,18 +498,68 @@
 	</Table>
 </div>
 
+{#snippet prCells(pr: UnifiedPR | null)}
+	<td class="col-source">
+		{#if pr}
+			<span class="pr-source-badge pr-source-{pr.source}">{pr.source === 'gitlab' ? 'GL' : 'GH'}</span>
+		{/if}
+	</td>
+	<td>
+		{#if pr}
+			<Button
+				variant="link"
+				label={prLabel(pr)}
+				onclick={() => openLink(pr.webUrl)}
+			/>
+		{:else}
+			<span class="empty">—</span>
+		{/if}
+	</td>
+	<td>
+		{#if pr}
+			<span class={`badge badge-${prStatusVariant(pr)}`}>
+				{prStatusLabel(pr)}
+			</span>
+		{:else}
+			<span class="empty">—</span>
+		{/if}
+	</td>
+	{#if mode !== 'summary'}
+		<td>
+			{#if pr && pr.ciStatus !== 'none'}
+				<span class={`badge badge-${ciVariant(pr.ciStatus)}`}>
+					{ciLabel(pr.ciStatus)}
+				</span>
+			{:else}
+				<span class="empty">—</span>
+			{/if}
+		</td>
+		<td class="col-comments">
+			{#if pr && pr.commentCount > 0}
+				<Button
+					variant="link"
+					label={String(pr.commentCount)}
+					onclick={() => openComments(pr)}
+				/>
+			{:else}
+				<span class="empty">—</span>
+			{/if}
+		</td>
+	{/if}
+{/snippet}
+
 <ClaudePicker bind:open={claudePickerOpen} jiraKey={claudePickerKey} selectedBranch={claudePickerBranch} branches={claudePickerBranches} onDone={handleClaudeDone} />
 
 <ModalContainer bind:open={modalOpen}>
 	{#snippet title()}
-		{#if activeModalRow?.mr}
-			<span class="modal-mr-title">{activeModalRow.mr.title}</span>
+		{#if activeModalPR}
+			<span class="modal-mr-title">{activeModalPR.title}</span>
 			<button
 				class="modal-mr-link"
-				onclick={() => openLink(activeModalRow!.mr!.webUrl)}
+				onclick={() => openLink(activeModalPR!.webUrl)}
 				aria-label="Open MR in GitLab"
 			>
-				!{activeModalRow.mr.iid}
+				{prLabel(activeModalPR)}
 			</button>
 		{/if}
 	{/snippet}
@@ -887,6 +911,34 @@
 		text-align: center;
 		color: var(--color-text-muted);
 		padding: 32px;
+	}
+
+	.col-source {
+		width: 36px;
+		text-align: center;
+		padding-left: 4px;
+		padding-right: 4px;
+	}
+
+	.pr-source-badge {
+		display: inline-flex;
+		align-items: center;
+		padding: 1px 5px;
+		border-radius: var(--radius);
+		font-size: 10px;
+		font-weight: 600;
+		margin-right: 4px;
+		vertical-align: middle;
+	}
+
+	.pr-source-gitlab {
+		background: var(--color-warning-muted);
+		color: var(--color-warning);
+	}
+
+	.pr-source-github {
+		background: var(--color-primary-muted);
+		color: var(--color-primary);
 	}
 
 	/* Modal header */

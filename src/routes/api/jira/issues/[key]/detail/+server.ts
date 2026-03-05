@@ -17,6 +17,7 @@ interface JiraIssueLink {
 interface JiraComment {
 	author: { displayName: string };
 	body: unknown;
+	renderedBody?: string;
 	created: string;
 }
 
@@ -28,7 +29,7 @@ export const GET: RequestHandler = async ({ params }) => {
 	const fieldsParam = 'summary,description,status,assignee,reporter,priority,issuetype,labels,created,updated,issuelinks';
 	const [issueRes, commentsRes] = await Promise.all([
 		fetch(`${jira.baseUrl}/rest/api/3/issue/${key}?fields=${fieldsParam}&expand=renderedFields`, { headers }),
-		fetch(`${jira.baseUrl}/rest/api/3/issue/${key}/comment`, { headers })
+		fetch(`${jira.baseUrl}/rest/api/3/issue/${key}/comment?expand=renderedBody`, { headers })
 	]);
 
 	if (!issueRes.ok) {
@@ -57,7 +58,7 @@ export const GET: RequestHandler = async ({ params }) => {
 		const commentsData = await commentsRes.json();
 		comments = ((commentsData.comments ?? []) as JiraComment[]).map((c) => ({
 			author: c.author.displayName,
-			body: typeof c.body === 'string' ? c.body : JSON.stringify(c.body),
+			body: c.renderedBody ?? (typeof c.body === 'string' ? c.body : ''),
 			created: c.created
 		}));
 	}

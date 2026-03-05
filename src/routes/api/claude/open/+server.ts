@@ -33,10 +33,25 @@ function resolvePromptText(promptKey: string): string {
 }
 
 function stripHtml(html: string): string {
-	return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+	return html
+		.replace(/<br\s*\/?>/gi, '\n')
+		.replace(/<\/?(p|div|li|h[1-6]|tr|blockquote|pre|ul|ol)[^>]*>/gi, '\n')
+		.replace(/<[^>]*>/g, '')
+		.replace(/&nbsp;/g, ' ')
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&amp;/g, '&')
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/\n[ \t]+/g, '\n')
+		.replace(/[ \t]+\n/g, '\n')
+		.replace(/\n{3,}/g, '\n\n')
+		.trim();
 }
 
-function buildPrompt(key: string, detail: JiraDetail, preamble: string): string {
+type CommentsMode = 'override' | 'secondary' | 'exclude';
+
+function buildPrompt(key: string, detail: JiraDetail, preamble: string, commentsMode: CommentsMode): string {
 	const description = stripHtml(detail.description);
 	const lines: string[] = [
 		preamble,
@@ -60,15 +75,23 @@ function buildPrompt(key: string, detail: JiraDetail, preamble: string): string 
 		}
 	}
 
-	const recentComments = detail.comments.slice(-3);
-	if (recentComments.length > 0) {
-		lines.push(
-			'',
-			`Recent comments (showing last ${recentComments.length} of ${detail.comments.length}):`
-		);
-		for (const c of recentComments) {
-			const body = c.body.length > 300 ? c.body.slice(0, 300) + '…' : c.body;
-			lines.push(`  ${c.author} (${c.created.slice(0, 10)}): ${body}`);
+	if (commentsMode !== 'exclude') {
+		const recentComments = detail.comments.slice(-3);
+		if (recentComments.length > 0) {
+			const commentNote = commentsMode === 'override'
+				? 'Note: Comments contain later discussions and decisions. Where a comment contradicts or refines the description, defer to the comment.'
+				: 'Note: The description above is the primary specification. Comments below provide additional context but do not override it.';
+			lines.push(
+				'',
+				commentNote,
+				'',
+				`Recent comments (showing last ${recentComments.length} of ${detail.comments.length}):`
+			);
+			for (const c of recentComments) {
+				const stripped = stripHtml(c.body);
+				const body = stripped.length > 300 ? stripped.slice(0, 300) + '…' : stripped;
+				lines.push(`  ${c.author} (${c.created.slice(0, 10)}): ${body}`);
+			}
 		}
 	}
 
@@ -97,7 +120,7 @@ function buildAppleScript(
 			'delay 0.5',
 			'tell application "System Events"',
 			'  tell process "Warp"',
-			'    keystroke "n" using command down',
+			'    keystroke "t" using command down',
 			'    delay 0.5',
 			`    keystroke ${JSON.stringify(command)}`,
 			'    key code 36',
@@ -117,8 +140,10 @@ export const POST: RequestHandler = async ({ request, fetch: kitFetch }) => {
 	let repoPath: string;
 	let promptKey: string | undefined;
 	let promptText: string | undefined;
+	let claudeFlags: { chrome?: boolean; resumeSessionId?: string } | undefined;
+	let commentsMode: CommentsMode = 'override';
 	try {
-		({ key, repoPath, promptKey, promptText } = await request.json());
+		({ key, repoPath, promptKey, promptText, claudeFlags, commentsMode = 'override' } = await request.json());
 	} catch {
 		return json({ ok: false, error: 'Invalid request body' }, { status: 400 });
 	}
@@ -145,7 +170,7 @@ export const POST: RequestHandler = async ({ request, fetch: kitFetch }) => {
 		} catch (e) {
 			return json({ ok: false, error: (e as Error).message }, { status: 422 });
 		}
-		prompt = buildPrompt(key, detail, preamble);
+		prompt = buildPrompt(key, detail, preamble, commentsMode);
 	}
 
 	const { terminal } = getConfig();
@@ -160,11 +185,16 @@ export const POST: RequestHandler = async ({ request, fetch: kitFetch }) => {
 
 	const appleScript = buildAppleScript(terminalChoice, shell, profile, scriptFile);
 
+	const flagParts: string[] = [];
+	if (claudeFlags?.chrome) flagParts.push('--chrome');
+	if (claudeFlags?.resumeSessionId) flagParts.push(`--resume ${shellQuote(claudeFlags.resumeSessionId)}`);
+	const claudeCmd = `claude${flagParts.length ? ' ' + flagParts.join(' ') : ''} "$(cat ${shellQuote(promptFile)})"`;
+
 	await Promise.all([
 		writeFile(promptFile, prompt, 'utf8'),
 		writeFile(
 			scriptFile,
-			`cd ${shellQuote(repoPath)}\nunset CLAUDECODE\nclaude "$(cat ${shellQuote(promptFile)})"\n`,
+			`cd ${shellQuote(repoPath)}\nunset CLAUDECODE\n${claudeCmd}\n`,
 			'utf8'
 		),
 		writeFile(appleScriptFile, appleScript, 'utf8')
