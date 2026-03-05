@@ -20,10 +20,10 @@ gitlab:
 # ─── GitHub ───────────────────────────────────────────────────────────────────
 # Optional: fetch GitHub PRs alongside GitLab MRs.
 # Your token goes in .env as GITHUB_TOKEN.
-# github:
-#   authorUsername: your-github-username   # GitHub username (filters PRs to yours)
-#   owner: your-org                        # GitHub org or user who owns the repo
-#   repo: your-repo-name                   # Repository name (without org prefix)
+github:
+  authorUsername: your-github-username   # GitHub username (filters PRs to yours)
+  owner: your-org                        # GitHub org or user who owns the repo
+  repo: your-repo-name                   # Repository name (without org prefix)
 
 # ─── Amplitude ────────────────────────────────────────────────────────────────
 # Base URL for the Amplitude Experiment Management API.
@@ -78,7 +78,7 @@ repoPath:
 # Which terminal app to launch Claude in, and how to configure it.
 # Supported: Terminal (macOS built-in), iTerm2, or Warp
 terminal:
-  terminalChoice: Warp                     # "Terminal", "iTerm2", or "Warp"
+  terminalChoice: iTerm2                   # "Terminal", "iTerm2", or "Warp"
 
   terminalConfigs:
     Terminal:

@@ -1,6 +1,7 @@
 node_modules
 
 # Output
+
 .output
 .vercel
 .netlify
@@ -21,6 +22,9 @@ Thumbs.db
 
 # User config (contains personal information)
 settings.yml
+
+# Claude local settings
+.claude
 
 # Vite
 vite.config.js.timestamp-*
