@@ -6,6 +6,7 @@
 	import DataTable from '$lib/components/DataTable.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import FlagSwitcher from '$lib/components/FlagSwitcher.svelte';
+	import UpdateBanner from '$lib/components/UpdateBanner.svelte';
 	import type { RenderMode } from '$lib/types';
 	import type { PageData } from './$types';
 
@@ -25,6 +26,7 @@
 	<title>Dashboard</title>
 </svelte:head>
 
+<UpdateBanner />
 <Container>
 	<Controls bind:mode onReload={handleReload} />
 
