@@ -482,7 +482,7 @@
 					<td rowspan={rowCount}>
 						<div class="status-wrapper">
 							<button
-								class={`badge badge-status-${jiraStatusColorToken(row.jiraItem.status)} badge-btn`}
+								class={`badge badge-${jiraStatusColorToken(row.jiraItem.status)} badge-btn`}
 								onclick={(e) => {
 									if (activeStatusKey === row.jiraItem.key) {
 										activeStatusKey = null;
@@ -568,7 +568,7 @@
 														<button class="link-btn" onclick={() => openLink(li.url)}>{li.key}</button>
 													</td>
 													<td>{li.summary}</td>
-													<td><span class={`badge badge-status-${jiraStatusColorToken(li.status)}`}>{li.status}</span></td>
+													<td><span class={`badge badge-${jiraStatusColorToken(li.status)}`}>{li.status}</span></td>
 												</tr>
 											{/each}
 										</tbody>
