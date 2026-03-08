@@ -26,6 +26,9 @@ interface YamlSettings {
 		baseUrl?: string;
 		orgSlug?: string;
 	};
+	jiraStatuses?: Array<{ label: string; colorToken: string }>;
+	prStatuses?: string[];
+	selfRepo?: { owner: string; repo: string };
 	claudePrompt?: {
 		default?: string;
 		basePath?: string;
@@ -86,6 +89,9 @@ export interface DashboardConfig {
 		baseUrl: string;
 		orgSlug: string;
 	};
+	jiraStatuses: Array<{ label: string; colorToken: string }>;
+	prStatuses: string[];
+	selfRepo: { owner: string; repo: string } | null;
 	claudePrompt: {
 		default: string;
 		basePath: string;
@@ -133,6 +139,11 @@ export function getConfig(): DashboardConfig {
 			baseUrl: settings.amplitude!.baseUrl!,
 			orgSlug: settings.amplitude?.orgSlug ?? ''
 		},
+		jiraStatuses: settings.jiraStatuses ?? [],
+		prStatuses: settings.prStatuses ?? [],
+		selfRepo: settings.selfRepo?.owner && settings.selfRepo?.repo
+			? { owner: settings.selfRepo.owner, repo: settings.selfRepo.repo }
+			: null,
 		claudePrompt: {
 			default: settings.claudePrompt!.default!,
 			basePath: settings.claudePrompt!.basePath!,
