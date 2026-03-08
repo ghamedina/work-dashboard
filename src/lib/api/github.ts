@@ -23,7 +23,7 @@ interface GitHubCheckRunsResponse {
 }
 
 export async function fetchGitHubPRs(config: DashboardConfig): Promise<UnifiedPR[]> {
-	const { owner, repo, authorUsername, token } = config.github!;
+	const { owner, repo, token } = config.github!;
 	const baseUrl = `https://api.github.com/repos/${owner}/${repo}/pulls`;
 	const headers = {
 		Authorization: `Bearer ${token}`,
@@ -31,13 +31,19 @@ export async function fetchGitHubPRs(config: DashboardConfig): Promise<UnifiedPR
 		'X-GitHub-Api-Version': '2022-11-28'
 	};
 
+	const teamUsernames = new Set(
+		config.team
+			.map((m) => m.githubAuthorUsername?.toLowerCase())
+			.filter(Boolean) as string[]
+	);
+
 	const [openPRs, closedPRs] = await Promise.all([
 		fetchPRPage(`${baseUrl}?state=open&per_page=100`, headers),
 		fetchPRPage(`${baseUrl}?state=closed&per_page=100`, headers)
 	]);
 
 	const mine = [...openPRs, ...closedPRs].filter(
-		(pr) => pr.user.login.toLowerCase() === authorUsername.toLowerCase()
+		(pr) => teamUsernames.has(pr.user.login.toLowerCase())
 	);
 
 	return Promise.all(
