@@ -1,5 +1,10 @@
 export type RenderMode = 'summary' | 'compact' | 'relaxed';
 
+export interface JiraStatusConfig {
+	label: string;
+	colorToken: string;
+}
+
 export interface JiraWorkItem {
 	key: string;
 	summary: string;

@@ -36,7 +36,7 @@
 		/>
 	{:then result}
 		{#if result.data !== null}
-			<DataTable rows={result.data} {mode} gitlabUnavailable={gitlabVpnError} />
+			<DataTable rows={result.data} {mode} gitlabUnavailable={gitlabVpnError} jiraStatuses={data.jiraStatuses} />
 		{:else}
 			<div class="error-state">
 				<p>Failed to load dashboard data.</p>

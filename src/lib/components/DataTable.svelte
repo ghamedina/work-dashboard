@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { DashboardRow, RenderMode, CIPipelineStatus, UnifiedPR, MRComment, JiraDetail } from '$lib/types';
+	import type { DashboardRow, RenderMode, CIPipelineStatus, UnifiedPR, MRComment, JiraDetail, JiraStatusConfig } from '$lib/types';
 	import Table from './Table.svelte';
 	import TableHeaderRow from './TableHeaderRow.svelte';
 	import TableBodyRow from './TableBodyRow.svelte';
@@ -13,9 +13,10 @@
 		rows: DashboardRow[];
 		mode: RenderMode;
 		gitlabUnavailable?: boolean;
+		jiraStatuses?: JiraStatusConfig[];
 	}
 
-	let { rows, mode, gitlabUnavailable = false }: Props = $props();
+	let { rows, mode, gitlabUnavailable = false, jiraStatuses = [] }: Props = $props();
 
 	let localRows = $state(untrack(() => [...rows]));
 
@@ -38,7 +39,21 @@
 	let statusAnchor = $state<HTMLElement | null>(null);
 	let statusError = $state<{ key: string; message: string } | null>(null);
 	let statusOptionsLoading = $state(false);
-	let activeStatusOptions = $state<{ label: string; value: string }[]>([]);
+	let activeStatusOptions = $state<{ label: string; value: string; colorToken?: string }[]>([]);
+
+	function buildStatusOptions(statuses: string[]): { label: string; value: string; colorToken?: string }[] {
+		const configOrder = jiraStatuses.map((c) => c.label.toLowerCase());
+		const sorted = [...statuses].sort((a, b) => {
+			const ai = configOrder.indexOf(a.toLowerCase());
+			const bi = configOrder.indexOf(b.toLowerCase());
+			return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+		});
+		return sorted.map((s) => ({
+			label: s,
+			value: s,
+			colorToken: jiraStatuses.find((c) => c.label.toLowerCase() === s.toLowerCase())?.colorToken
+		}));
+	}
 
 	async function openStatusDropdown(jiraKey: string, anchor: HTMLElement) {
 		statusAnchor = anchor;
@@ -46,7 +61,7 @@
 		statusError = null;
 
 		if (statusOptionsCache.has(jiraKey)) {
-			activeStatusOptions = statusOptionsCache.get(jiraKey)!.map((s) => ({ label: s, value: s }));
+			activeStatusOptions = buildStatusOptions(statusOptionsCache.get(jiraKey)!);
 			return;
 		}
 
@@ -57,7 +72,7 @@
 			const data = await res.json().catch(() => ({}));
 			if (!res.ok || !data.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
 			statusOptionsCache.set(jiraKey, data.statuses);
-			activeStatusOptions = data.statuses.map((s: string) => ({ label: s, value: s }));
+			activeStatusOptions = buildStatusOptions(data.statuses);
 		} catch {
 			activeStatusOptions = [];
 		} finally {
@@ -124,16 +139,12 @@
 		return pr.state;
 	}
 
-	type BadgeVariant = 'primary' | 'success' | 'warning' | 'danger' | 'purple' | 'gray';
-
-	function jiraStatusVariant(status: string): BadgeVariant {
-		const s = status.toLowerCase();
-		if (s.includes('progress')) return 'primary';
-		if (s.includes('review')) return 'purple';
-		if (s.includes('done') || s.includes('closed') || s.includes('resolved')) return 'success';
-		if (s.includes('blocked')) return 'danger';
-		return 'gray';
+	function jiraStatusColorToken(status: string): string {
+		const s = status.toLowerCase().trim();
+		return jiraStatuses.find((c) => c.label.toLowerCase() === s)?.colorToken ?? 'status-gray';
 	}
+
+	type BadgeVariant = 'primary' | 'success' | 'warning' | 'danger' | 'purple' | 'gray';
 
 	function prStatusVariant(pr: UnifiedPR): BadgeVariant {
 		if (pr.state === 'draft') return 'gray';
@@ -391,7 +402,7 @@
 					<td rowspan={rowCount}>
 						<div class="status-wrapper">
 							<button
-								class={`badge badge-${jiraStatusVariant(row.jiraItem.status)} badge-btn`}
+								class={`badge badge-status-${jiraStatusColorToken(row.jiraItem.status)} badge-btn`}
 								onclick={(e) => {
 									if (activeStatusKey === row.jiraItem.key) {
 										activeStatusKey = null;
@@ -884,8 +895,15 @@
 		gap: 2px;
 	}
 
+	.badge-status-gray { background: var(--status-gray-bg); color: var(--status-gray-text); }
+	.badge-status-blue { background: var(--status-blue-bg); color: var(--status-blue-text); }
+	.badge-status-teal { background: var(--status-teal-bg); color: var(--status-teal-text); }
+	.badge-status-teal-green { background: var(--status-teal-green-bg); color: var(--status-teal-green-text); }
+	.badge-status-yellow-green { background: var(--status-yellow-green-bg); color: var(--status-yellow-green-text); }
+	.badge-status-green { background: var(--status-green-bg); color: var(--status-green-text); }
+	.badge-status-red { background: var(--status-red-bg); color: var(--status-red-text); }
+
 	.badge-btn {
-		background: none;
 		border: none;
 		font-family: inherit;
 		cursor: pointer;
