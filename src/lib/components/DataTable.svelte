@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { DashboardRow, RenderMode, CIPipelineStatus, UnifiedPR, MRComment, JiraDetail, JiraStatusConfig } from '$lib/types';
+	import { computeQaStatus, type QaStatus } from '$lib/qa-status';
 	import Table from './Table.svelte';
 	import TableHeaderRow from './TableHeaderRow.svelte';
 	import TableBodyRow from './TableBodyRow.svelte';
@@ -22,9 +23,9 @@
 
 	let localRows = $state(untrack(() => [...rows]));
 
-	type SortKey = 'workItem' | 'status' | 'mr' | 'mrStatus';
+	type SortKey = 'workItem' | 'status' | 'mr' | 'mrStatus' | 'qaStatus';
 	type SortDir = 'asc' | 'desc';
-	const VALID_SORT_KEYS: SortKey[] = ['workItem', 'status', 'mr', 'mrStatus'];
+	const VALID_SORT_KEYS: SortKey[] = ['workItem', 'status', 'mr', 'mrStatus', 'qaStatus'];
 	const SORT_STORAGE_KEY = 'dashboard-sort';
 
 	function loadSortState(): { sortKey: SortKey | null; sortDir: SortDir } {
@@ -87,6 +88,13 @@
 				const bi = prStatuses.indexOf(bp.state);
 				result = (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
 			}
+		} else if (sortKey === 'qaStatus') {
+			const qaOrder: Array<QaStatus | null> = ['qa-failed', 'qa-ci', 'qa-test', 'qa', 'qa-deployed', 'qa-success', null];
+			const ap = a.prs[0] ?? null;
+			const bp = b.prs[0] ?? null;
+			const aq = ap ? computeQaStatus(ap)?.status ?? null : null;
+			const bq = bp ? computeQaStatus(bp)?.status ?? null : null;
+			result = qaOrder.indexOf(aq) - qaOrder.indexOf(bq);
 		}
 		return sortDir === 'asc' ? result : -result;
 	}
@@ -330,7 +338,7 @@
 		expandedKeys = next;
 	}
 
-	let totalColumns = $derived(mode === 'summary' ? 8 : 10);
+	let totalColumns = $derived(mode === 'summary' ? 9 : 11);
 
 	// Comments modal — keyed by "{source}:{id}"
 	let modalOpen = $state(false);
@@ -433,6 +441,14 @@
 					MR Status
 					<span class={`sort-icon ${sortKey === 'mrStatus' ? 'sort-active' : 'sort-idle'}`}>
 						{sortKey === 'mrStatus' ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
+					</span>
+				</button>
+			</th>
+			<th>
+				<button class="sort-btn" onclick={() => toggleSort('qaStatus')}>
+					QA
+					<span class={`sort-icon ${sortKey === 'qaStatus' ? 'sort-active' : 'sort-idle'}`}>
+						{sortKey === 'qaStatus' ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
 					</span>
 				</button>
 			</th>
@@ -629,12 +645,16 @@
 	</td>
 	<td>
 		{#if pr}
-			<div class="mr-status-cell">
-				<span class={`badge badge-${prStatusVariant(pr)}`}>
-					{prStatusLabel(pr)}
-				</span>
-				<QaStatusBadge {pr} />
-			</div>
+			<span class={`badge badge-${prStatusVariant(pr)}`}>
+				{prStatusLabel(pr)}
+			</span>
+		{:else}
+			<span class="empty">—</span>
+		{/if}
+	</td>
+	<td>
+		{#if pr}
+			<QaStatusBadge {pr} />
 		{:else}
 			<span class="empty">—</span>
 		{/if}
@@ -1029,13 +1049,6 @@
 		display: inline-flex;
 		flex-direction: column;
 		gap: 2px;
-	}
-
-	.mr-status-cell {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 3px;
 	}
 
 	.badge-status-gray { background: var(--status-gray-bg); color: var(--status-gray-text); }
