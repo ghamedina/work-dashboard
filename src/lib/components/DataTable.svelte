@@ -23,8 +23,25 @@
 
 	type SortKey = 'workItem' | 'status' | 'mr' | 'mrStatus';
 	type SortDir = 'asc' | 'desc';
-	let sortKey = $state<SortKey | null>(null);
-	let sortDir = $state<SortDir>('asc');
+	const VALID_SORT_KEYS: SortKey[] = ['workItem', 'status', 'mr', 'mrStatus'];
+	const SORT_STORAGE_KEY = 'dashboard-sort';
+
+	function loadSortState(): { sortKey: SortKey | null; sortDir: SortDir } {
+		try {
+			const stored = localStorage.getItem(SORT_STORAGE_KEY);
+			if (stored) {
+				const parsed = JSON.parse(stored) as { sortKey: unknown; sortDir: unknown };
+				const key = VALID_SORT_KEYS.includes(parsed.sortKey as SortKey) ? (parsed.sortKey as SortKey) : null;
+				const dir = parsed.sortDir === 'desc' ? 'desc' : 'asc';
+				return { sortKey: key, sortDir: dir };
+			}
+		} catch {}
+		return { sortKey: null, sortDir: 'asc' };
+	}
+
+	const initialSort = loadSortState();
+	let sortKey = $state<SortKey | null>(initialSort.sortKey);
+	let sortDir = $state<SortDir>(initialSort.sortDir);
 
 	function toggleSort(key: SortKey) {
 		if (sortKey === key) {
@@ -33,6 +50,9 @@
 			sortKey = key;
 			sortDir = 'asc';
 		}
+		try {
+			localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify({ sortKey, sortDir }));
+		} catch {}
 	}
 
 	function compareRows(a: DashboardRow, b: DashboardRow): number {
