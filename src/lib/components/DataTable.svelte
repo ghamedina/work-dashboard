@@ -14,11 +14,63 @@
 		mode: RenderMode;
 		gitlabUnavailable?: boolean;
 		jiraStatuses?: JiraStatusConfig[];
+		prStatuses?: string[];
 	}
 
-	let { rows, mode, gitlabUnavailable = false, jiraStatuses = [] }: Props = $props();
+	let { rows, mode, gitlabUnavailable = false, jiraStatuses = [], prStatuses = [] }: Props = $props();
 
 	let localRows = $state(untrack(() => [...rows]));
+
+	type SortKey = 'workItem' | 'status' | 'mr' | 'mrStatus';
+	type SortDir = 'asc' | 'desc';
+	let sortKey = $state<SortKey | null>(null);
+	let sortDir = $state<SortDir>('asc');
+
+	function toggleSort(key: SortKey) {
+		if (sortKey === key) {
+			sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+		} else {
+			sortKey = key;
+			sortDir = 'asc';
+		}
+	}
+
+	function compareRows(a: DashboardRow, b: DashboardRow): number {
+		let result = 0;
+		if (sortKey === 'workItem') {
+			result = a.jiraItem.summary.toLowerCase().localeCompare(b.jiraItem.summary.toLowerCase());
+		} else if (sortKey === 'status') {
+			const order = jiraStatuses.map((c) => c.label.toLowerCase());
+			const ai = order.indexOf(a.jiraItem.status.toLowerCase());
+			const bi = order.indexOf(b.jiraItem.status.toLowerCase());
+			result = (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+		} else if (sortKey === 'mr') {
+			const ap = a.prs[0] ?? null;
+			const bp = b.prs[0] ?? null;
+			if (!ap && !bp) result = 0;
+			else if (!ap) result = 1;
+			else if (!bp) result = -1;
+			else {
+				const srcOrder = ['gitlab', 'github'];
+				const srcDiff = srcOrder.indexOf(ap.source) - srcOrder.indexOf(bp.source);
+				result = srcDiff !== 0 ? srcDiff : ap.id - bp.id;
+			}
+		} else if (sortKey === 'mrStatus') {
+			const ap = a.prs[0] ?? null;
+			const bp = b.prs[0] ?? null;
+			if (!ap && !bp) result = 0;
+			else if (!ap) result = 1;
+			else if (!bp) result = -1;
+			else {
+				const ai = prStatuses.indexOf(ap.state);
+				const bi = prStatuses.indexOf(bp.state);
+				result = (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+			}
+		}
+		return sortDir === 'asc' ? result : -result;
+	}
+
+	let sortedRows = $derived(sortKey === null ? localRows : [...localRows].sort(compareRows));
 
 	const statusOptionsCache = new Map<string, string[]>();
 
@@ -329,12 +381,40 @@
 	<Table>
 		<TableHeaderRow>
 			<th class="col-action"></th>
-			<th>Work Item</th>
+			<th>
+				<button class="sort-btn" onclick={() => toggleSort('workItem')}>
+					Work Item
+					<span class={`sort-icon ${sortKey === 'workItem' ? 'sort-active' : 'sort-idle'}`}>
+						{sortKey === 'workItem' ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
+					</span>
+				</button>
+			</th>
 			<th class="col-summary">Summary</th>
-			<th>Status</th>
+			<th>
+				<button class="sort-btn" onclick={() => toggleSort('status')}>
+					Status
+					<span class={`sort-icon ${sortKey === 'status' ? 'sort-active' : 'sort-idle'}`}>
+						{sortKey === 'status' ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
+					</span>
+				</button>
+			</th>
 			<th class="col-source"></th>
-			<th>MR / PR</th>
-			<th>MR Status</th>
+			<th>
+				<button class="sort-btn" onclick={() => toggleSort('mr')}>
+					MR / PR
+					<span class={`sort-icon ${sortKey === 'mr' ? 'sort-active' : 'sort-idle'}`}>
+						{sortKey === 'mr' ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
+					</span>
+				</button>
+			</th>
+			<th>
+				<button class="sort-btn" onclick={() => toggleSort('mrStatus')}>
+					MR Status
+					<span class={`sort-icon ${sortKey === 'mrStatus' ? 'sort-active' : 'sort-idle'}`}>
+						{sortKey === 'mrStatus' ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
+					</span>
+				</button>
+			</th>
 			{#if mode !== 'summary'}
 				<th>CI</th>
 				<th class="col-comments">Comments</th>
@@ -342,7 +422,7 @@
 			<th class="col-branch">Branch</th>
 		</TableHeaderRow>
 		<tbody>
-			{#each localRows as row (row.jiraItem.key)}
+			{#each sortedRows as row (row.jiraItem.key)}
 				{@const copyState = copyStates[row.jiraItem.key] ?? 'idle'}
 				{@const claudeState = claudeStates[row.jiraItem.key] ?? 'idle'}
 				{@const rowCount = Math.max(row.prs.length, 1)}
@@ -488,7 +568,7 @@
 														<button class="link-btn" onclick={() => openLink(li.url)}>{li.key}</button>
 													</td>
 													<td>{li.summary}</td>
-													<td>{li.status}</td>
+													<td><span class={`badge badge-status-${jiraStatusColorToken(li.status)}`}>{li.status}</span></td>
 												</tr>
 											{/each}
 										</tbody>
@@ -650,6 +730,38 @@
 		color: var(--color-text-muted);
 		white-space: nowrap;
 		padding: 8px 12px;
+	}
+
+	.sort-btn {
+		background: none;
+		border: none;
+		cursor: pointer;
+		font: inherit;
+		color: inherit;
+		letter-spacing: inherit;
+		text-transform: inherit;
+		padding: 0;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.sort-btn:hover {
+		color: var(--color-text);
+	}
+
+	.sort-icon {
+		font-size: 10px;
+		line-height: 1;
+	}
+
+	.sort-idle {
+		opacity: 0.4;
+	}
+
+	.sort-active {
+		color: var(--color-primary);
+		opacity: 1;
 	}
 
 	td {

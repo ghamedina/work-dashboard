@@ -111,6 +111,7 @@ export const load: PageServerLoad = () => {
 		amplitudeOrgSlug: config.amplitude.orgSlug,
 		githubConfigured: config.github !== null,
 		jiraStatuses: config.jiraStatuses,
+		prStatuses: config.prStatuses,
 		streamed: {
 			jiraStatus,
 			gitlabStatus,
