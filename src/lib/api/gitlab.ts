@@ -1,5 +1,5 @@
 import type { DashboardConfig } from '$lib/config';
-import type { CIPipelineStatus, GitLabMR } from '$lib/types';
+import type { CIPipelineJob, CIPipelineStatus, GitLabMR } from '$lib/types';
 
 interface GitLabBranchResponse {
 	name: string;
@@ -12,10 +12,28 @@ interface GitLabMRResponse {
 	draft: boolean;
 	web_url: string;
 	user_notes_count: number;
+	labels: string[];
+	description: string;
 }
 
 interface GitLabPipelineResponse {
+	id: number;
 	status: string;
+	web_url: string;
+}
+
+interface GitLabPipelineJobResponse {
+	id: number;
+	name: string;
+	status: string;
+	web_url: string;
+}
+
+export interface CIPipelineInfo {
+	status: CIPipelineStatus;
+	pipelineId: number | null;
+	pipelineWebUrl: string | null;
+	jobs: CIPipelineJob[];
 }
 
 export async function fetchGitLabMRs(config: DashboardConfig): Promise<GitLabMR[]> {
@@ -36,7 +54,9 @@ export async function fetchGitLabMRs(config: DashboardConfig): Promise<GitLabMR[
 		state: mr.state,
 		draft: mr.draft,
 		webUrl: mr.web_url,
-		userNotesCount: mr.user_notes_count
+		userNotesCount: mr.user_notes_count,
+		labels: mr.labels ?? [],
+		description: mr.description ?? ''
 	}));
 }
 
@@ -63,10 +83,10 @@ export async function fetchGitLabBranches(config: DashboardConfig, search: strin
 	return branches.map((b) => b.name);
 }
 
-export async function fetchCIPipelineStatus(
+export async function fetchCIPipelineInfo(
 	config: DashboardConfig,
 	mrIid: number
-): Promise<CIPipelineStatus> {
+): Promise<CIPipelineInfo> {
 	const url = `${config.gitlab.baseUrl}/api/v4/projects/${config.gitlab.projectId}/merge_requests/${mrIid}/pipelines`;
 
 	const response = await fetch(url, {
@@ -74,16 +94,16 @@ export async function fetchCIPipelineStatus(
 	});
 
 	if (!response.ok) {
-		return 'none';
+		return { status: 'none', pipelineId: null, pipelineWebUrl: null, jobs: [] };
 	}
 
 	const pipelines: GitLabPipelineResponse[] = await response.json();
 
 	if (pipelines.length === 0) {
-		return 'none';
+		return { status: 'none', pipelineId: null, pipelineWebUrl: null, jobs: [] };
 	}
 
-	const status = pipelines[0].status;
+	const pipeline = pipelines[0];
 	const validStatuses: CIPipelineStatus[] = [
 		'success',
 		'failed',
@@ -93,7 +113,37 @@ export async function fetchCIPipelineStatus(
 		'skipped'
 	];
 
-	return validStatuses.includes(status as CIPipelineStatus)
-		? (status as CIPipelineStatus)
+	const status: CIPipelineStatus = validStatuses.includes(pipeline.status as CIPipelineStatus)
+		? (pipeline.status as CIPipelineStatus)
 		: 'none';
+
+	const jobs = await fetchPipelineJobs(config, pipeline.id);
+
+	return {
+		status,
+		pipelineId: pipeline.id,
+		pipelineWebUrl: pipeline.web_url,
+		jobs
+	};
+}
+
+async function fetchPipelineJobs(
+	config: DashboardConfig,
+	pipelineId: number
+): Promise<CIPipelineJob[]> {
+	const url = `${config.gitlab.baseUrl}/api/v4/projects/${config.gitlab.projectId}/pipelines/${pipelineId}/jobs`;
+
+	const response = await fetch(url, {
+		headers: { 'PRIVATE-TOKEN': config.gitlab.token }
+	});
+
+	if (!response.ok) return [];
+
+	const jobs: GitLabPipelineJobResponse[] = await response.json();
+	return jobs.map((j) => ({
+		id: j.id,
+		name: j.name,
+		status: j.status,
+		webUrl: j.web_url
+	}));
 }
