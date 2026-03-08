@@ -10,6 +10,7 @@
 	import DropdownMenu from './DropdownMenu.svelte';
 	import ClaudePicker from './ClaudePicker.svelte';
 	import QaStatusBadge from './QaStatusBadge.svelte';
+	import BadgeButton from './BadgeButton.svelte';
 
 	interface Props {
 		rows: DashboardRow[];
@@ -118,6 +119,7 @@
 
 	let activeStatusKey = $state<string | null>(null);
 	let statusAnchor = $state<HTMLElement | null>(null);
+	let statusButtonEls = $state<Record<string, HTMLButtonElement | undefined>>({});
 	let statusError = $state<{ key: string; message: string } | null>(null);
 	let statusOptionsLoading = $state(false);
 	let activeStatusOptions = $state<{ label: string; value: string; colorToken?: string }[]>([]);
@@ -498,9 +500,9 @@
 						</div>
 					</td>
 					<td rowspan={rowCount}>
-						<Button
-							variant="link"
+						<BadgeButton
 							label={row.jiraItem.key}
+							colorToken="primary"
 							onclick={() => openLink(row.jiraItem.url)}
 						/>
 					</td>
@@ -518,18 +520,18 @@
 					</td>
 					<td rowspan={rowCount}>
 						<div class="status-wrapper">
-							<button
-								class={`badge badge-${jiraStatusColorToken(row.jiraItem.status)} badge-btn`}
-								onclick={(e) => {
+							<BadgeButton
+								label={row.jiraItem.status}
+								colorToken={jiraStatusColorToken(row.jiraItem.status)}
+								bind:element={statusButtonEls[row.jiraItem.key]}
+								onclick={() => {
 									if (activeStatusKey === row.jiraItem.key) {
 										activeStatusKey = null;
 									} else {
-										openStatusDropdown(row.jiraItem.key, e.currentTarget as HTMLElement);
+										openStatusDropdown(row.jiraItem.key, statusButtonEls[row.jiraItem.key]!);
 									}
 								}}
-							>
-								{row.jiraItem.status}
-							</button>
+							/>
 							{#if statusError?.key === row.jiraItem.key}
 								<span class="status-error">{statusError.message}</span>
 							{/if}
@@ -634,9 +636,9 @@
 	</td>
 	<td>
 		{#if pr}
-			<Button
-				variant="link"
+			<BadgeButton
 				label={prLabel(pr)}
+				colorToken="primary"
 				onclick={() => openLink(pr.webUrl)}
 			/>
 		{:else}
