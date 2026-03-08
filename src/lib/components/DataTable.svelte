@@ -8,6 +8,7 @@
 	import ModalContainer from './ModalContainer.svelte';
 	import DropdownMenu from './DropdownMenu.svelte';
 	import ClaudePicker from './ClaudePicker.svelte';
+	import QaStatusBadge from './QaStatusBadge.svelte';
 
 	interface Props {
 		rows: DashboardRow[];
@@ -628,9 +629,12 @@
 	</td>
 	<td>
 		{#if pr}
-			<span class={`badge badge-${prStatusVariant(pr)}`}>
-				{prStatusLabel(pr)}
-			</span>
+			<div class="mr-status-cell">
+				<span class={`badge badge-${prStatusVariant(pr)}`}>
+					{prStatusLabel(pr)}
+				</span>
+				<QaStatusBadge {pr} />
+			</div>
 		{:else}
 			<span class="empty">—</span>
 		{/if}
@@ -1025,6 +1029,13 @@
 		display: inline-flex;
 		flex-direction: column;
 		gap: 2px;
+	}
+
+	.mr-status-cell {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 3px;
 	}
 
 	.badge-status-gray { background: var(--status-gray-bg); color: var(--status-gray-text); }

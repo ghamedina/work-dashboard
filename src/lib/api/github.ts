@@ -67,7 +67,11 @@ function toUnifiedPR(pr: GitHubPRResponse, ciStatus: CIPipelineStatus): UnifiedP
 		state,
 		webUrl: pr.html_url,
 		commentCount: pr.comments + pr.review_comments,
-		ciStatus
+		ciStatus,
+		labels: [],
+		description: '',
+		pipelineWebUrl: null,
+		pipelineJobs: []
 	};
 }
 

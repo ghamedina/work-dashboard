@@ -19,6 +19,8 @@ export interface GitLabMR {
 	draft: boolean;
 	webUrl: string;
 	userNotesCount: number;
+	labels: string[];
+	description: string;
 }
 
 export type CIPipelineStatus =
@@ -30,6 +32,13 @@ export type CIPipelineStatus =
 	| 'skipped'
 	| 'none';
 
+export interface CIPipelineJob {
+	id: number;
+	name: string;
+	status: string;
+	webUrl: string;
+}
+
 export interface UnifiedPR {
 	source: 'gitlab' | 'github';
 	id: number;
@@ -38,6 +47,10 @@ export interface UnifiedPR {
 	webUrl: string;
 	commentCount: number;
 	ciStatus: CIPipelineStatus;
+	labels: string[];
+	description: string;
+	pipelineWebUrl: string | null;
+	pipelineJobs: CIPipelineJob[];
 }
 
 export interface DashboardRow {
