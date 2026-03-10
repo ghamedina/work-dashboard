@@ -4,6 +4,7 @@ import type { CIPipelineStatus, UnifiedPR } from '$lib/types';
 interface GitHubPRResponse {
 	number: number;
 	title: string;
+	body: string | null;
 	state: 'open' | 'closed';
 	draft: boolean;
 	html_url: string;
@@ -75,7 +76,7 @@ function toUnifiedPR(pr: GitHubPRResponse, ciStatus: CIPipelineStatus): UnifiedP
 		commentCount: pr.comments + pr.review_comments,
 		ciStatus,
 		labels: [],
-		description: '',
+		description: pr.body ?? '',
 		pipelineWebUrl: null,
 		pipelineJobs: []
 	};
