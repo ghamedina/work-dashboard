@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { UnifiedPR } from '$lib/types';
 	import { computeQaStatus } from '$lib/qa-status';
+	import BadgeButton from './BadgeButton.svelte';
 
 	interface Props {
 		pr: UnifiedPR;
@@ -60,16 +61,13 @@
 
 {#if qaResult}
 	<div class="qa-wrapper">
-		<button
-			class={`badge badge-${badgeVariant(qaResult.status)} badge-btn qa-badge`}
+		<BadgeButton
+			label={badgeLabel(qaResult.status)}
+			colorToken={badgeVariant(qaResult.status)}
 			onclick={handleClick}
 			onkeydown={handleKeydown}
-		>
-			{badgeLabel(qaResult.status)}
-			{#if qaResult.circleBadge}
-				<span class={`circle circle-${qaResult.circleBadge}`}></span>
-			{/if}
-		</button>
+			badge={qaResult.circleBadge}
+		/>
 
 		{#if dropdownOpen}
 			<div class="job-dropdown" role="menu">
@@ -96,32 +94,6 @@
 	.qa-wrapper {
 		position: relative;
 		display: inline-flex;
-	}
-
-	.qa-badge {
-		display: inline-flex;
-		align-items: center;
-		gap: 5px;
-	}
-
-	.circle {
-		display: inline-block;
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-		flex-shrink: 0;
-	}
-
-	.circle-blue {
-		background: var(--color-primary);
-	}
-
-	.circle-red {
-		background: var(--color-danger);
-	}
-
-	.circle-green {
-		background: var(--color-success);
 	}
 
 	.job-dropdown {

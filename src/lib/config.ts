@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse } from 'yaml';
 import { JIRA_TOKEN, GITLAB_TOKEN, GITHUB_TOKEN } from '$env/static/private';
+import type { TeamMember } from '$lib/types';
 
 export type TerminalChoice = 'Terminal' | 'iTerm2' | 'Warp';
 
@@ -22,6 +23,7 @@ interface YamlSettings {
 		repo?: string;
 		authorUsername?: string;
 	};
+	team?: TeamMember[];
 	amplitude?: {
 		baseUrl?: string;
 		orgSlug?: string;
@@ -59,8 +61,8 @@ function loadSettings(): YamlSettings {
 	}
 
 	if (!settings.jira?.email) throw new Error('settings.yml: jira.email is required');
-	if (!settings.gitlab?.authorUsername)
-		throw new Error('settings.yml: gitlab.authorUsername is required');
+	if (!settings.team && !settings.gitlab?.authorUsername)
+		throw new Error('settings.yml: gitlab.authorUsername is required (or define a team)');
 
 	return settings;
 }
@@ -85,6 +87,7 @@ export interface DashboardConfig {
 		repo: string;
 		authorUsername: string;
 	} | null;
+	team: TeamMember[];
 	amplitude: {
 		baseUrl: string;
 		orgSlug: string;
@@ -111,9 +114,21 @@ export interface DashboardConfig {
 	};
 }
 
+function buildTeam(settings: YamlSettings): TeamMember[] {
+	if (settings.team && settings.team.length > 0) return settings.team;
+	return [
+		{
+			jiraEmail: settings.jira?.email,
+			gitlabAuthorUsername: settings.gitlab?.authorUsername,
+			githubAuthorUsername: settings.github?.authorUsername
+		}
+	];
+}
+
 export function getConfig(): DashboardConfig {
 	const settings = loadSettings();
 	return {
+		team: buildTeam(settings),
 		jira: {
 			baseUrl: settings.jira!.baseUrl!,
 			email: settings.jira!.email!,

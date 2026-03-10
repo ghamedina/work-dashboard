@@ -39,14 +39,28 @@ export interface CIPipelineInfo {
 export async function fetchGitLabMRs(config: DashboardConfig): Promise<GitLabMR[]> {
 	const baseUrl = `${config.gitlab.baseUrl}/api/v4/projects/${config.gitlab.projectId}/merge_requests`;
 	const headers = { 'PRIVATE-TOKEN': config.gitlab.token };
-	const authorParam = `author_username=${encodeURIComponent(config.gitlab.authorUsername)}`;
 
-	const [openMRs, mergedMRs] = await Promise.all([
-		fetchMRPage(`${baseUrl}?state=opened&${authorParam}&per_page=100`, headers),
-		fetchMRPage(`${baseUrl}?state=merged&${authorParam}&per_page=100`, headers)
-	]);
+	const usernames = config.team
+		.map((m) => m.gitlabAuthorUsername)
+		.filter(Boolean) as string[];
 
-	const all = [...openMRs, ...mergedMRs];
+	const perMember = await Promise.all(
+		usernames.map(async (username) => {
+			const authorParam = `author_username=${encodeURIComponent(username)}`;
+			const [openMRs, mergedMRs] = await Promise.all([
+				fetchMRPage(`${baseUrl}?state=opened&${authorParam}&per_page=100`, headers),
+				fetchMRPage(`${baseUrl}?state=merged&${authorParam}&per_page=100`, headers)
+			]);
+			return [...openMRs, ...mergedMRs];
+		})
+	);
+
+	const seen = new Set<number>();
+	const all = perMember.flat().filter((mr) => {
+		if (seen.has(mr.iid)) return false;
+		seen.add(mr.iid);
+		return true;
+	});
 
 	return all.map((mr) => ({
 		iid: mr.iid,

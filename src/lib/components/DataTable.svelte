@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { DashboardRow, RenderMode, CIPipelineStatus, UnifiedPR, MRComment, JiraDetail, JiraStatusConfig } from '$lib/types';
+	import { computeQaStatus, type QaStatus } from '$lib/qa-status';
 	import Table from './Table.svelte';
 	import TableHeaderRow from './TableHeaderRow.svelte';
 	import TableBodyRow from './TableBodyRow.svelte';
@@ -9,6 +10,7 @@
 	import DropdownMenu from './DropdownMenu.svelte';
 	import ClaudePicker from './ClaudePicker.svelte';
 	import QaStatusBadge from './QaStatusBadge.svelte';
+	import BadgeButton from './BadgeButton.svelte';
 
 	interface Props {
 		rows: DashboardRow[];
@@ -22,9 +24,9 @@
 
 	let localRows = $state(untrack(() => [...rows]));
 
-	type SortKey = 'workItem' | 'status' | 'mr' | 'mrStatus';
+	type SortKey = 'workItem' | 'status' | 'mr' | 'mrStatus' | 'qaStatus';
 	type SortDir = 'asc' | 'desc';
-	const VALID_SORT_KEYS: SortKey[] = ['workItem', 'status', 'mr', 'mrStatus'];
+	const VALID_SORT_KEYS: SortKey[] = ['workItem', 'status', 'mr', 'mrStatus', 'qaStatus'];
 	const SORT_STORAGE_KEY = 'dashboard-sort';
 
 	function loadSortState(): { sortKey: SortKey | null; sortDir: SortDir } {
@@ -87,6 +89,13 @@
 				const bi = prStatuses.indexOf(bp.state);
 				result = (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
 			}
+		} else if (sortKey === 'qaStatus') {
+			const qaOrder: Array<QaStatus | null> = ['qa-failed', 'qa-ci', 'qa-test', 'qa', 'qa-deployed', 'qa-success', null];
+			const ap = a.prs[0] ?? null;
+			const bp = b.prs[0] ?? null;
+			const aq = ap ? computeQaStatus(ap)?.status ?? null : null;
+			const bq = bp ? computeQaStatus(bp)?.status ?? null : null;
+			result = qaOrder.indexOf(aq) - qaOrder.indexOf(bq);
 		}
 		return sortDir === 'asc' ? result : -result;
 	}
@@ -110,6 +119,7 @@
 
 	let activeStatusKey = $state<string | null>(null);
 	let statusAnchor = $state<HTMLElement | null>(null);
+	let statusButtonEls = $state<Record<string, HTMLButtonElement | undefined>>({});
 	let statusError = $state<{ key: string; message: string } | null>(null);
 	let statusOptionsLoading = $state(false);
 	let activeStatusOptions = $state<{ label: string; value: string; colorToken?: string }[]>([]);
@@ -330,7 +340,7 @@
 		expandedKeys = next;
 	}
 
-	let totalColumns = $derived(mode === 'summary' ? 8 : 10);
+	let totalColumns = $derived(mode === 'summary' ? 9 : 11);
 
 	// Comments modal — keyed by "{source}:{id}"
 	let modalOpen = $state(false);
@@ -436,6 +446,14 @@
 					</span>
 				</button>
 			</th>
+			<th>
+				<button class="sort-btn" onclick={() => toggleSort('qaStatus')}>
+					QA
+					<span class={`sort-icon ${sortKey === 'qaStatus' ? 'sort-active' : 'sort-idle'}`}>
+						{sortKey === 'qaStatus' ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
+					</span>
+				</button>
+			</th>
 			{#if mode !== 'summary'}
 				<th>CI</th>
 				<th class="col-comments">Comments</th>
@@ -482,9 +500,9 @@
 						</div>
 					</td>
 					<td rowspan={rowCount}>
-						<Button
-							variant="link"
+						<BadgeButton
 							label={row.jiraItem.key}
+							colorToken="primary"
 							onclick={() => openLink(row.jiraItem.url)}
 						/>
 					</td>
@@ -502,18 +520,18 @@
 					</td>
 					<td rowspan={rowCount}>
 						<div class="status-wrapper">
-							<button
-								class={`badge badge-${jiraStatusColorToken(row.jiraItem.status)} badge-btn`}
-								onclick={(e) => {
+							<BadgeButton
+								label={row.jiraItem.status}
+								colorToken={jiraStatusColorToken(row.jiraItem.status)}
+								bind:element={statusButtonEls[row.jiraItem.key]}
+								onclick={() => {
 									if (activeStatusKey === row.jiraItem.key) {
 										activeStatusKey = null;
 									} else {
-										openStatusDropdown(row.jiraItem.key, e.currentTarget as HTMLElement);
+										openStatusDropdown(row.jiraItem.key, statusButtonEls[row.jiraItem.key]!);
 									}
 								}}
-							>
-								{row.jiraItem.status}
-							</button>
+							/>
 							{#if statusError?.key === row.jiraItem.key}
 								<span class="status-error">{statusError.message}</span>
 							{/if}
@@ -618,9 +636,9 @@
 	</td>
 	<td>
 		{#if pr}
-			<Button
-				variant="link"
+			<BadgeButton
 				label={prLabel(pr)}
+				colorToken="primary"
 				onclick={() => openLink(pr.webUrl)}
 			/>
 		{:else}
@@ -629,12 +647,16 @@
 	</td>
 	<td>
 		{#if pr}
-			<div class="mr-status-cell">
-				<span class={`badge badge-${prStatusVariant(pr)}`}>
-					{prStatusLabel(pr)}
-				</span>
-				<QaStatusBadge {pr} />
-			</div>
+			<span class={`badge badge-${prStatusVariant(pr)}`}>
+				{prStatusLabel(pr)}
+			</span>
+		{:else}
+			<span class="empty">—</span>
+		{/if}
+	</td>
+	<td>
+		{#if pr}
+			<QaStatusBadge {pr} />
 		{:else}
 			<span class="empty">—</span>
 		{/if}
@@ -1029,13 +1051,6 @@
 		display: inline-flex;
 		flex-direction: column;
 		gap: 2px;
-	}
-
-	.mr-status-cell {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 3px;
 	}
 
 	.badge-status-gray { background: var(--status-gray-bg); color: var(--status-gray-text); }

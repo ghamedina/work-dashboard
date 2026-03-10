@@ -1,5 +1,12 @@
 export type RenderMode = 'summary' | 'compact' | 'relaxed';
 
+export interface TeamMember {
+	name?: string;
+	jiraEmail?: string;
+	gitlabAuthorUsername?: string;
+	githubAuthorUsername?: string;
+}
+
 export interface JiraStatusConfig {
 	label: string;
 	colorToken: string;
