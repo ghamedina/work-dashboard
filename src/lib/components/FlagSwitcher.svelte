@@ -216,6 +216,7 @@
 		padding: 10px 16px;
 		border-bottom: 1px solid var(--color-border);
 		background: var(--color-surface);
+		border-radius: var(--radius) var(--radius) 0 0;
 	}
 
 	.flag-switcher-title {
