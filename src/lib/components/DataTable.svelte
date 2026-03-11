@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { DashboardRow, RenderMode, CIPipelineStatus, UnifiedPR, MRComment, JiraDetail } from '$lib/types';
+	import { jiraStatusVariant, type DashboardRow, type RenderMode, type CIPipelineStatus, type UnifiedPR, type MRComment, type JiraDetail, type BadgeVariant } from '$lib/types';
 	import Table from './Table.svelte';
 	import TableHeaderRow from './TableHeaderRow.svelte';
 	import TableBodyRow from './TableBodyRow.svelte';
@@ -127,17 +127,6 @@
 		if (pr.state === 'merged') return 'Merged';
 		if (pr.state === 'closed') return 'Closed';
 		return pr.state;
-	}
-
-	type BadgeVariant = 'primary' | 'success' | 'warning' | 'danger' | 'purple' | 'gray';
-
-	function jiraStatusVariant(status: string): BadgeVariant {
-		const s = status.toLowerCase();
-		if (s.includes('progress')) return 'primary';
-		if (s.includes('review')) return 'purple';
-		if (s.includes('done') || s.includes('closed') || s.includes('resolved')) return 'success';
-		if (s.includes('blocked')) return 'danger';
-		return 'gray';
 	}
 
 	function prStatusVariant(pr: UnifiedPR): BadgeVariant {

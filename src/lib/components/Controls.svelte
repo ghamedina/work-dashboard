@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { RenderMode } from '$lib/types';
+	import { jiraStatusVariant, type RenderMode } from '$lib/types';
 	import Button from './Button.svelte';
 	import ButtonGroup from './ButtonGroup.svelte';
 	import Tooltip from './Tooltip.svelte';
@@ -46,16 +46,6 @@
 			try { el.hidePopover(); } catch {}
 		}
 	});
-
-	function statusColor(status: string): string {
-		const s = status.toLowerCase();
-		if (s.includes('progress')) return 'primary';
-		if (s.includes('review')) return 'purple';
-		if (s.includes('done') || s.includes('closed') || s.includes('resolved')) return 'success';
-		if (s.includes('blocked')) return 'danger';
-		if (s.includes('open') || s.includes('to do') || s.includes('backlog')) return 'warning';
-		return 'gray';
-	}
 
 	function handlePopoverToggle(e: Event) {
 		const toggleEvent = e as ToggleEvent;
@@ -121,7 +111,7 @@
 				aria-pressed={enabledStatuses.has(status)}
 			>
 				<span class="status-check">{enabledStatuses.has(status) ? '✓' : ''}</span>
-				<span class="status-dot status-dot-{statusColor(status)}"></span>
+				<span class="status-dot status-dot-{jiraStatusVariant(status)}"></span>
 				{status}
 			</button>
 		{/each}
