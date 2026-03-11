@@ -11,9 +11,11 @@
 		statuses?: string[];
 		enabledStatuses?: Set<string>;
 		onToggleStatus?: (status: string) => void;
+		onSelectAll?: () => void;
+		onDeselectAll?: () => void;
 	}
 
-	let { mode = $bindable(), onReload, statuses = [], enabledStatuses = new Set(), onToggleStatus }: Props = $props();
+	let { mode = $bindable(), onReload, statuses = [], enabledStatuses = new Set(), onToggleStatus, onSelectAll, onDeselectAll }: Props = $props();
 
 	let dropdownOpen = $state(false);
 	let triggerEl = $state<HTMLButtonElement>();
@@ -101,6 +103,12 @@
 >
 	<div class="status-popover-header">
 		<span class="status-popover-title">Filter statuses</span>
+		<button
+			class="status-toggle-all"
+			onclick={() => enabledCount === statuses.length ? onDeselectAll?.() : onSelectAll?.()}
+		>
+			{enabledCount === statuses.length ? 'Deselect all' : 'Select all'}
+		</button>
 	</div>
 	<div class="status-popover-list">
 		{#each statuses as status (status)}
@@ -110,9 +118,9 @@
 				onclick={() => onToggleStatus?.(status)}
 				aria-pressed={enabledStatuses.has(status)}
 			>
-				<span class="status-check">{enabledStatuses.has(status) ? '✓' : ''}</span>
 				<span class="status-dot status-dot-{jiraStatusVariant(status)}"></span>
-				{status}
+				<span class="status-label">{status}</span>
+				<span class="status-check">{enabledStatuses.has(status) ? '✓' : ''}</span>
 			</button>
 		{/each}
 	</div>
@@ -126,6 +134,7 @@
 		padding: 10px 16px;
 		border-bottom: 1px solid var(--color-border);
 		background: var(--color-surface);
+		border-radius: var(--radius) var(--radius) 0 0;
 	}
 
 	.controls-title {
@@ -204,8 +213,25 @@
 	}
 
 	.status-popover-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
 		padding: 8px 12px;
 		border-bottom: 1px solid var(--color-border);
+	}
+
+	.status-toggle-all {
+		background: none;
+		border: none;
+		font-size: 11px;
+		font-family: inherit;
+		color: var(--color-primary);
+		cursor: pointer;
+		padding: 0;
+	}
+
+	.status-toggle-all:hover {
+		text-decoration: underline;
 	}
 
 	.status-popover-title {
@@ -245,8 +271,8 @@
 	}
 
 	.status-dot {
-		width: 8px;
-		height: 8px;
+		width: 6px;
+		height: 6px;
 		border-radius: 50%;
 		flex-shrink: 0;
 	}
@@ -257,6 +283,10 @@
 	.status-dot-danger { background: var(--color-danger); }
 	.status-dot-purple { background: var(--color-purple); }
 	.status-dot-gray { background: var(--color-text-muted); }
+
+	.status-label {
+		flex: 1;
+	}
 
 	.status-check {
 		display: inline-flex;

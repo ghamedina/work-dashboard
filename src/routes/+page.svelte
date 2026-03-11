@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
-	import { onMount } from 'svelte';
 	import Container from '$lib/components/Container.svelte';
 	import Controls from '$lib/components/Controls.svelte';
 	import Loader from '$lib/components/Loader.svelte';
@@ -25,7 +24,7 @@
 	});
 
 	$effect(() => {
-		data.streamed.jiraStatuses.then((statuses) => {
+		data.streamed.jiraStatuses.then((statuses: string[]) => {
 			if (statuses.length > 0) {
 				allStatuses = statuses;
 				if (!initialized) {
@@ -76,7 +75,15 @@
 </svelte:head>
 
 <Container>
-	<Controls bind:mode onReload={handleReload} statuses={allStatuses} {enabledStatuses} onToggleStatus={handleToggleStatus} />
+	<Controls
+		bind:mode
+		onReload={handleReload}
+		statuses={allStatuses}
+		{enabledStatuses}
+		onToggleStatus={handleToggleStatus}
+		onSelectAll={() => { enabledStatuses = new Set(allStatuses); persistStatuses(); }}
+		onDeselectAll={() => { enabledStatuses = new Set(); persistStatuses(); }}
+	/>
 
 	{#await data.streamed.rows}
 		<Loader
