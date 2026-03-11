@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { getConfig } from '$lib/config';
-import { fetchJiraWorkItems } from '$lib/api/jira';
+import { fetchJiraWorkItems, fetchJiraProjectStatuses } from '$lib/api/jira';
 import { fetchGitLabMRs, fetchCIPipelineStatus, fetchGitLabBranches } from '$lib/api/gitlab';
 import { fetchGitHubPRs } from '$lib/api/github';
 import type { DashboardRow, GitLabMR, UnifiedPR } from '$lib/types';
@@ -56,6 +56,7 @@ export const load: PageServerLoad = () => {
 	const config = getConfig();
 
 	const jiraPromise = fetchJiraWorkItems(config);
+	const jiraStatusesPromise = fetchJiraProjectStatuses(config).catch(() => [] as string[]);
 	const gitlabPromise = fetchGitLabMRs(config);
 	const githubPromise = config.github
 		? fetchGitHubPRs(config)
@@ -115,7 +116,8 @@ export const load: PageServerLoad = () => {
 			gitlabStatus,
 			githubStatus,
 			gitlabVpnError,
-			rows
+			rows,
+			jiraStatuses: jiraStatusesPromise
 		}
 	};
 };
