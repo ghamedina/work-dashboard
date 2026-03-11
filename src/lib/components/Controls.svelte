@@ -47,6 +47,16 @@
 		}
 	});
 
+	function statusColor(status: string): string {
+		const s = status.toLowerCase();
+		if (s.includes('progress')) return 'primary';
+		if (s.includes('review')) return 'purple';
+		if (s.includes('done') || s.includes('closed') || s.includes('resolved')) return 'success';
+		if (s.includes('blocked')) return 'danger';
+		if (s.includes('open') || s.includes('to do') || s.includes('backlog')) return 'warning';
+		return 'gray';
+	}
+
 	function handlePopoverToggle(e: Event) {
 		const toggleEvent = e as ToggleEvent;
 		if (toggleEvent.newState === 'closed' && dropdownOpen) {
@@ -111,6 +121,7 @@
 				aria-pressed={enabledStatuses.has(status)}
 			>
 				<span class="status-check">{enabledStatuses.has(status) ? '✓' : ''}</span>
+				<span class="status-dot status-dot-{statusColor(status)}"></span>
 				{status}
 			</button>
 		{/each}
@@ -242,6 +253,20 @@
 	.status-option.active {
 		color: var(--color-text);
 	}
+
+	.status-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.status-dot-primary { background: var(--color-primary); }
+	.status-dot-success { background: var(--color-success); }
+	.status-dot-warning { background: var(--color-warning); }
+	.status-dot-danger { background: var(--color-danger); }
+	.status-dot-purple { background: var(--color-purple); }
+	.status-dot-gray { background: var(--color-text-muted); }
 
 	.status-check {
 		display: inline-flex;
