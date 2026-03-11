@@ -5,7 +5,8 @@
 	import Button from './Button.svelte';
 	import Table from './Table.svelte';
 	import TableHeaderRow from './TableHeaderRow.svelte';
-  import Container from './Container.svelte';
+	import Container from './Container.svelte';
+	import { createDragReorder } from '$lib/drag-reorder.svelte';
 
 	interface Props {
 		amplitudeOrgSlug: string;
@@ -124,6 +125,16 @@
 		rows = [];
 		localStorage.removeItem(STORAGE_KEY);
 	}
+
+	// --- Drag & Drop reordering ---
+	const drag = createDragReorder({
+		items: () => rows,
+		getKey: (r) => r.id,
+		onReorder(next) {
+			rows = next;
+			persistRows();
+		}
+	});
 </script>
 
 <Container>
@@ -163,6 +174,7 @@
 	{#if rows.length > 0}
 		<Table>
 			<TableHeaderRow>
+				<th class="col-drag"></th>
 				<th>Flag Key</th>
 				<th>Segment</th>
 				<th>Email</th>
@@ -179,6 +191,12 @@
 						onUpdate={updateRow}
 						onRemove={() => removeRow(row.id)}
 						onClone={cloneRow}
+						isDragOver={drag.dragOverKey === row.id}
+						onDragStart={() => drag.start(row.id)}
+						onDragOver={(e) => drag.over(e, row.id)}
+						onDragLeave={drag.leave}
+						onDrop={() => drag.drop(row.id)}
+						onDragEnd={drag.end}
 					/>
 				{/each}
 			</tbody>
@@ -285,5 +303,10 @@
 		color: var(--color-text-muted);
 		white-space: nowrap;
 		padding: 8px 12px;
+	}
+
+	.col-drag {
+		width: 28px;
+		padding: 0;
 	}
 </style>

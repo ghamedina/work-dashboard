@@ -5,6 +5,7 @@
 	import EmailToggleButton from './EmailToggleButton.svelte';
 	import Button from './Button.svelte';
 	import DropdownMenu from './DropdownMenu.svelte';
+	import DragHandle from './DragHandle.svelte';
 
 	interface Props {
 		row: FlagSwitcherRowData;
@@ -13,9 +14,15 @@
 		onUpdate: (updated: FlagSwitcherRowData) => void;
 		onRemove: () => void;
 		onClone: (row: FlagSwitcherRowData) => void;
+		isDragOver?: boolean;
+		onDragStart?: () => void;
+		onDragOver?: (e: DragEvent) => void;
+		onDragLeave?: () => void;
+		onDrop?: () => void;
+		onDragEnd?: () => void;
 	}
 
-	let { row, flags, amplitudeOrgSlug, onUpdate, onRemove, onClone }: Props = $props();
+	let { row, flags, amplitudeOrgSlug, onUpdate, onRemove, onClone, isDragOver = false, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd }: Props = $props();
 
 	let flagKey = $state(untrack(() => row.flagKey));
 	let segmentName = $state(untrack(() => row.segmentName));
@@ -148,7 +155,16 @@
 	}
 </script>
 
-<TableBodyRow>
+<TableBodyRow
+	{isDragOver}
+	onDragOver={onDragOver}
+	onDragLeave={onDragLeave}
+	onDrop={onDrop}
+>
+	<DragHandle
+		onDragStart={onDragStart ?? (() => {})}
+		onDragEnd={onDragEnd ?? (() => {})}
+	/>
 	<td class="cell-flag-key">
 		<div class="flag-key-input">
 			<input
@@ -237,6 +253,7 @@
 		border-bottom: 1px solid var(--color-border);
 		vertical-align: middle;
 	}
+
 
 	.cell-flag-key {
 		white-space: nowrap;
