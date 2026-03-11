@@ -8,6 +8,11 @@
 	import ModalContainer from './ModalContainer.svelte';
 	import DropdownMenu from './DropdownMenu.svelte';
 	import ClaudePicker from './ClaudePicker.svelte';
+	import DragHandle from './DragHandle.svelte';
+	import { createDragReorder, applyPersistedOrder, persistOrder } from '$lib/drag-reorder.svelte';
+
+	const ROW_ORDER_KEY = 'dashboard-row-order';
+	const getRowKey = (r: DashboardRow) => r.jiraItem.key;
 
 	interface Props {
 		rows: DashboardRow[];
@@ -17,7 +22,7 @@
 
 	let { rows, mode, gitlabUnavailable = false }: Props = $props();
 
-	let localRows = $state(untrack(() => [...rows]));
+	let localRows = $state<DashboardRow[]>([]);
 
 	const statusOptionsCache = new Map<string, string[]>();
 
@@ -233,6 +238,22 @@
 		}, 3000);
 	}
 
+	// --- Drag & Drop reordering ---
+	const drag = createDragReorder({
+		items: () => localRows,
+		getKey: getRowKey,
+		onReorder(next) {
+			localRows = next;
+			persistOrder(localRows, ROW_ORDER_KEY, getRowKey);
+		}
+	});
+
+	// Apply persisted order when rows prop changes (including initial load)
+	$effect(() => {
+		void rows;
+		localRows = untrack(() => applyPersistedOrder([...rows], ROW_ORDER_KEY, getRowKey));
+	});
+
 	let expandedKeys = $state(new Set<string>());
 
 	async function toggleExpand(key: string) {
@@ -246,7 +267,7 @@
 		expandedKeys = next;
 	}
 
-	let totalColumns = $derived(mode === 'summary' ? 8 : 10);
+	let totalColumns = $derived(mode === 'summary' ? 9 : 11);
 
 	// Comments modal — keyed by "{source}:{id}"
 	let modalOpen = $state(false);
@@ -317,6 +338,7 @@
 <div class={`table-container mode-${mode}`}>
 	<Table>
 		<TableHeaderRow>
+			<th class="col-drag"></th>
 			<th class="col-action"></th>
 			<th>Work Item</th>
 			<th class="col-summary">Summary</th>
@@ -336,7 +358,17 @@
 				{@const claudeState = claudeStates[row.jiraItem.key] ?? 'idle'}
 				{@const rowCount = Math.max(row.prs.length, 1)}
 				{@const firstPR = row.prs[0] ?? null}
-				<TableBodyRow>
+				<TableBodyRow
+					isDragOver={drag.dragOverKey === row.jiraItem.key}
+					onDragOver={(e) => drag.over(e, row.jiraItem.key)}
+					onDragLeave={drag.leave}
+					onDrop={() => drag.drop(row.jiraItem.key)}
+				>
+					<DragHandle
+						rowspan={rowCount}
+						onDragStart={() => drag.start(row.jiraItem.key)}
+						onDragEnd={drag.end}
+					/>
 					<td rowspan={rowCount} class="cell-action">
 						<div class="action-btns">
 							<button
@@ -653,6 +685,11 @@
 
 	.mode-relaxed td {
 		padding: 14px 12px;
+	}
+
+	.col-drag {
+		width: 28px;
+		padding: 0;
 	}
 
 	.col-action {
