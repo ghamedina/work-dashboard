@@ -10,6 +10,7 @@
 	interface Props {
 		row: FlagSwitcherRowData;
 		flags: AmplitudeFlag[];
+		allProjects: Array<{ name: string; id: string }>;
 		amplitudeOrgSlug: string;
 		onUpdate: (updated: FlagSwitcherRowData) => void;
 		onRemove: () => void;
@@ -22,11 +23,15 @@
 		onDragEnd?: () => void;
 	}
 
-	let { row, flags, amplitudeOrgSlug, onUpdate, onRemove, onClone, isDragOver = false, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd }: Props = $props();
+	let { row, flags, allProjects, amplitudeOrgSlug, onUpdate, onRemove, onClone, isDragOver = false, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd }: Props = $props();
+
+	const DEFAULT_PROJECT = 'housecall.io_development';
 
 	let flagKey = $state(untrack(() => row.flagKey));
+	let selectedProject = $state(untrack(() => row.projectId || DEFAULT_PROJECT));
 	let segmentName = $state(untrack(() => row.segmentName));
 	let email = $state(untrack(() => row.email));
+	let projectData = $state<Record<string, { segmentName: string; email: string }>>(untrack(() => row.projectData ?? {}));
 	let localFlag = $state<AmplitudeFlag | null>(untrack(() => row.flag));
 	let toggleLoading = $state(false);
 	let toggleError = $state<string | null>(null);
@@ -37,8 +42,14 @@
 	let filteredFlagItems = $derived.by(() => {
 		const terms = flagKey.toLowerCase().split(' ').filter((t) => t.length > 0);
 		if (terms.length === 0) return [];
+		const seen = new Set<string>();
 		return flags
 			.filter((f) => terms.every((t) => f.key.toLowerCase().includes(t)))
+			.filter((f) => {
+				if (seen.has(f.key)) return false;
+				seen.add(f.key);
+				return true;
+			})
 			.map((f) => ({ label: f.key, value: f.key }));
 	});
 
@@ -47,7 +58,13 @@
 		dropdownActiveIndex = -1;
 	});
 
-	let matchedFlag = $derived(localFlag ?? flags.find((f) => f.key === flagKey) ?? null);
+	let matchedFlag = $derived(
+		localFlag ??
+		(flagKey && selectedProject
+			? flags.find((f) => f.key === flagKey && f.projectName === selectedProject)
+			: null) ??
+		null
+	);
 	let selectedSegment = $derived(
 		matchedFlag?.targetSegments.find((s) => s.name === segmentName) ?? null
 	);
@@ -58,11 +75,13 @@
 
 	function applyFlagKey(newKey: string) {
 		flagKey = newKey;
+		selectedProject = DEFAULT_PROJECT;
 		segmentName = '';
 		email = '';
+		projectData = {};
 		localFlag = null;
 		toggleError = null;
-		onUpdate({ ...row, flagKey: newKey, segmentName: '', email: '', flag: null });
+		onUpdate({ ...row, flagKey: newKey, projectId: DEFAULT_PROJECT, segmentName: '', email: '', projectData: {}, flag: null });
 	}
 
 	function handleFlagKeyInput(e: Event) {
@@ -103,17 +122,59 @@
 		}
 	}
 
+	async function handleProjectChange(e: Event) {
+		// Save current project's data before switching
+		if (selectedProject) {
+			projectData = { ...projectData, [selectedProject]: { segmentName, email } };
+		}
+
+		const newProject = (e.target as HTMLSelectElement).value;
+		selectedProject = newProject;
+
+		// Restore saved data for the new project, or start fresh
+		const saved = projectData[newProject];
+		segmentName = saved?.segmentName ?? '';
+		email = saved?.email ?? '';
+		localFlag = null;
+		toggleError = null;
+		onUpdate({ ...row, flagKey, projectId: newProject, segmentName, email, projectData, flag: null });
+
+		// Refetch the flag for the new project to get current segment state
+		if (flagKey && newProject) {
+			try {
+				const res = await fetch(`/api/amplitude/flags/${encodeURIComponent(flagKey)}?projectName=${encodeURIComponent(newProject)}`);
+				if (res.ok) {
+					const freshFlag = (await res.json()) as AmplitudeFlag;
+					if (selectedProject === newProject) {
+						localFlag = freshFlag;
+						onUpdate({ ...row, flagKey, projectId: newProject, segmentName, email, projectData, flag: freshFlag });
+					}
+				}
+			} catch {
+				// Non-critical — falls back to cached flags data
+			}
+		}
+	}
+
+	function syncProjectData() {
+		if (selectedProject) {
+			projectData = { ...projectData, [selectedProject]: { segmentName, email } };
+		}
+	}
+
 	function handleSegmentChange(e: Event) {
 		segmentName = (e.target as HTMLSelectElement).value;
 		email = '';
 		toggleError = null;
-		onUpdate({ ...row, flagKey, segmentName, email: '', flag: localFlag });
+		syncProjectData();
+		onUpdate({ ...row, flagKey, projectId: selectedProject, segmentName, email: '', projectData, flag: localFlag });
 	}
 
 	function handleEmailInput(e: Event) {
 		email = (e.target as HTMLInputElement).value;
 		toggleError = null;
-		onUpdate({ ...row, flagKey, segmentName, email, flag: localFlag });
+		syncProjectData();
+		onUpdate({ ...row, flagKey, projectId: selectedProject, segmentName, email, projectData, flag: localFlag });
 	}
 
 	async function handleToggle() {
@@ -139,14 +200,15 @@
 			const res = await fetch(`/api/amplitude/flags/${matchedFlag.id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ targetSegments: updatedSegments, flagKey })
+				body: JSON.stringify({ targetSegments: updatedSegments, flagKey, projectName: selectedProject })
 			});
 
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
 			const updatedFlag = (await res.json()) as AmplitudeFlag;
 			localFlag = updatedFlag;
-			onUpdate({ ...row, flagKey, segmentName, email, flag: updatedFlag });
+			syncProjectData();
+			onUpdate({ ...row, flagKey, projectId: selectedProject, segmentName, email, projectData, flag: updatedFlag });
 		} catch (err) {
 			toggleError = err instanceof Error ? err.message : 'Toggle failed';
 		} finally {
@@ -192,8 +254,18 @@
 			onSelect={selectFlagKey}
 		/>
 	</td>
+	<td class="cell-project">
+		{#if allProjects.length > 0}
+			<select class="select-input" onchange={handleProjectChange} value={selectedProject}>
+				<option value="">Select project…</option>
+				{#each allProjects as project (project.name)}
+					<option value={project.name}>{project.name}</option>
+				{/each}
+			</select>
+		{/if}
+	</td>
 	<td class="cell-segment">
-		{#if matchedFlag}
+		{#if matchedFlag && selectedProject}
 			<select class="select-input" onchange={handleSegmentChange} value={segmentName}>
 				<option value="">Select segment…</option>
 				{#each matchedFlag.targetSegments as seg (seg.name)}
@@ -265,6 +337,11 @@
 		gap: 6px;
 	}
 
+	.cell-flag-key .text-input {
+		flex: 1;
+		min-width: 0;
+	}
+
 .text-input {
 		padding: 4px 8px;
 		border: 1px solid var(--color-border);
@@ -301,6 +378,14 @@
 
 	.select-input:focus {
 		border-color: var(--color-primary);
+	}
+
+	.cell-email .text-input {
+		width: 220px;
+	}
+
+	.cell-project {
+		white-space: nowrap;
 	}
 
 	.cell-toggle {
