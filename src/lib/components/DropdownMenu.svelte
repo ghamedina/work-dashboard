@@ -2,6 +2,7 @@
 	interface Item {
 		label: string;
 		value: string;
+		colorToken?: string;
 	}
 
 	interface Props {
@@ -90,7 +91,14 @@
 				select(item.value);
 			}}
 		>
-			{item.label}
+			{#if item.colorToken}
+				<span
+					class="item-tag"
+					style="background: var(--{item.colorToken}-bg); color: var(--{item.colorToken}-text);"
+				>{item.label}</span>
+			{:else}
+				{item.label}
+			{/if}
 		</li>
 	{/each}
 </ul>
@@ -126,6 +134,20 @@
 	.dropdown-item:hover,
 	.dropdown-item.active {
 		background: var(--color-primary-muted);
-		color: var(--color-primary);
+	}
+
+	.dropdown-item:hover .item-tag,
+	.dropdown-item.active .item-tag {
+		filter: brightness(0.92);
+	}
+
+	.item-tag {
+		display: inline-flex;
+		align-items: center;
+		padding: 1px 7px;
+		border-radius: 8px;
+		font-size: 11px;
+		font-weight: 500;
+		white-space: nowrap;
 	}
 </style>

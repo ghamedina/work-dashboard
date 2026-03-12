@@ -15,7 +15,12 @@ interface JiraSearchResponse {
 
 export async function fetchJiraWorkItems(config: DashboardConfig): Promise<JiraWorkItem[]> {
 	const projectList = config.jira.projectKeys.join(', ');
-	const jql = `assignee = currentUser() AND project in (${projectList}) AND sprint in openSprints()`;
+	const jiraEmails = config.team.map((m) => m.jiraEmail).filter(Boolean) as string[];
+	const assigneeClause =
+		jiraEmails.length > 0
+			? `assignee in (${jiraEmails.map((e) => `"${e}"`).join(', ')})`
+			: 'assignee = currentUser()';
+	const jql = `${assigneeClause} AND project in (${projectList}) AND sprint in openSprints()`;
 	const fields = 'key,summary,status';
 
 	const url = `${config.jira.baseUrl}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&fields=${fields}`;

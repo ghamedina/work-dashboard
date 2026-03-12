@@ -32,10 +32,22 @@ function resolvePromptText(promptKey: string): string {
 	return readFileSync(resolved, 'utf-8').trim();
 }
 
-function stripHtml(html: string): string {
+function htmlToMarkdown(html: string): string {
 	return html
+		.replace(/<h1[^>]*>(.*?)<\/h1>/gis, '\n# $1\n')
+		.replace(/<h2[^>]*>(.*?)<\/h2>/gis, '\n## $1\n')
+		.replace(/<h3[^>]*>(.*?)<\/h3>/gis, '\n### $1\n')
+		.replace(/<h[4-6][^>]*>(.*?)<\/h[4-6]>/gis, '\n#### $1\n')
+		.replace(/<strong[^>]*>(.*?)<\/strong>/gis, '**$1**')
+		.replace(/<b[^>]*>(.*?)<\/b>/gis, '**$1**')
+		.replace(/<em[^>]*>(.*?)<\/em>/gis, '*$1*')
+		.replace(/<i[^>]*>(.*?)<\/i>/gis, '*$1*')
+		.replace(/<code[^>]*>(.*?)<\/code>/gis, '`$1`')
+		.replace(/<pre[^>]*>(.*?)<\/pre>/gis, '\n```\n$1\n```\n')
+		.replace(/<a[^>]+href="([^"]*)"[^>]*>(.*?)<\/a>/gis, '[$2]($1)')
+		.replace(/<li[^>]*>(.*?)<\/li>/gis, '\n- $1')
 		.replace(/<br\s*\/?>/gi, '\n')
-		.replace(/<\/?(p|div|li|h[1-6]|tr|blockquote|pre|ul|ol)[^>]*>/gi, '\n')
+		.replace(/<\/?(p|div|ul|ol|tr|blockquote)[^>]*>/gi, '\n')
 		.replace(/<[^>]*>/g, '')
 		.replace(/&nbsp;/g, ' ')
 		.replace(/&lt;/g, '<')
@@ -52,7 +64,7 @@ function stripHtml(html: string): string {
 type CommentsMode = 'override' | 'secondary' | 'exclude';
 
 function buildPrompt(key: string, detail: JiraDetail, preamble: string, commentsMode: CommentsMode): string {
-	const description = stripHtml(detail.description);
+	const description = htmlToMarkdown(detail.description);
 	const lines: string[] = [
 		preamble,
 		'',
@@ -88,7 +100,7 @@ function buildPrompt(key: string, detail: JiraDetail, preamble: string, comments
 				`Recent comments (showing last ${recentComments.length} of ${detail.comments.length}):`
 			);
 			for (const c of recentComments) {
-				const stripped = stripHtml(c.body);
+				const stripped = htmlToMarkdown(c.body);
 				const body = stripped.length > 300 ? stripped.slice(0, 300) + '…' : stripped;
 				lines.push(`  ${c.author} (${c.created.slice(0, 10)}): ${body}`);
 			}

@@ -25,6 +25,25 @@ github:
   owner: your-org                        # GitHub org or user who owns the repo
   repo: your-repo-name                   # Repository name (without org prefix)
 
+# ─── Team ─────────────────────────────────────────────────────────────────────
+# Optional: define team members to show work items for the whole team.
+# If omitted, the dashboard shows only your own work (using the email and
+# authorUsername fields above as a single implicit member).
+#
+# Each member can specify any combination of per-service identities:
+#   jiraEmail            — Jira account email (used in assignee JQL filter)
+#   gitlabAuthorUsername — GitLab username (filters MRs by author)
+#   githubAuthorUsername — GitHub username (filters PRs by author)
+#
+# team:
+#   - name: Alice
+#     jiraEmail: alice@company.com
+#     gitlabAuthorUsername: alice.gitlab
+#     githubAuthorUsername: alice-gh
+#   - name: Bob
+#     jiraEmail: bob@company.com
+#     gitlabAuthorUsername: bob.gitlab
+
 # ─── Amplitude ────────────────────────────────────────────────────────────────
 # Amplitude Experiment Management API. Each project needs its own API key.
 # API keys go in .env — only the project name and env var reference go here.

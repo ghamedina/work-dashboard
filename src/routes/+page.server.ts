@@ -1,7 +1,8 @@
 import type { PageServerLoad } from './$types';
 import { getConfig } from '$lib/config';
 import { fetchJiraWorkItems, fetchJiraProjectStatuses } from '$lib/api/jira';
-import { fetchGitLabMRs, fetchCIPipelineStatus, fetchGitLabBranches } from '$lib/api/gitlab';
+import { fetchGitLabMRs, fetchCIPipelineInfo, fetchGitLabBranches } from '$lib/api/gitlab';
+import type { CIPipelineInfo } from '$lib/api/gitlab';
 import { fetchGitHubPRs } from '$lib/api/github';
 import type { DashboardRow, GitLabMR, UnifiedPR } from '$lib/types';
 
@@ -29,7 +30,7 @@ function isGitLabUnavailable(err: unknown): boolean {
 	);
 }
 
-function gitlabMRToUnifiedPR(mr: GitLabMR, ciStatus: UnifiedPR['ciStatus']): UnifiedPR {
+function gitlabMRToUnifiedPR(mr: GitLabMR, ciInfo: CIPipelineInfo): UnifiedPR {
 	let state: UnifiedPR['state'];
 	if (mr.draft) {
 		state = 'draft';
@@ -48,7 +49,11 @@ function gitlabMRToUnifiedPR(mr: GitLabMR, ciStatus: UnifiedPR['ciStatus']): Uni
 		state,
 		webUrl: mr.webUrl,
 		commentCount: mr.userNotesCount,
-		ciStatus
+		ciStatus: ciInfo.status,
+		labels: mr.labels,
+		description: mr.description,
+		pipelineWebUrl: ciInfo.pipelineWebUrl,
+		pipelineJobs: ciInfo.jobs
 	};
 }
 
@@ -90,10 +95,10 @@ export const load: PageServerLoad = () => {
 						const [gitlabUnified, branches] = await Promise.all([
 							Promise.all(
 								matchingGitLabMRs.map(async (mr) => {
-									const ciStatus = await fetchCIPipelineStatus(config, mr.iid).catch(
-										() => 'none' as const
+									const ciInfo = await fetchCIPipelineInfo(config, mr.iid).catch(
+										() => ({ status: 'none' as const, pipelineId: null, pipelineWebUrl: null, jobs: [] })
 									);
-									return gitlabMRToUnifiedPR(mr, ciStatus);
+									return gitlabMRToUnifiedPR(mr, ciInfo);
 								})
 							),
 							fetchGitLabBranches(config, jiraItem.key).catch(() => [] as string[])
@@ -111,6 +116,8 @@ export const load: PageServerLoad = () => {
 	return {
 		amplitudeOrgSlug: config.amplitude.orgSlug,
 		githubConfigured: config.github !== null,
+		jiraStatuses: config.jiraStatuses,
+		prStatuses: config.prStatuses,
 		streamed: {
 			jiraStatus,
 			gitlabStatus,

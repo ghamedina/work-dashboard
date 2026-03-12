@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse } from 'yaml';
 import { JIRA_TOKEN, GITLAB_TOKEN, GITHUB_TOKEN } from '$env/static/private';
+import type { TeamMember } from '$lib/types';
 
 export type TerminalChoice = 'Terminal' | 'iTerm2' | 'Warp';
 
@@ -22,6 +23,7 @@ interface YamlSettings {
 		repo?: string;
 		authorUsername?: string;
 	};
+	team?: TeamMember[];
 	amplitude?: {
 		baseUrl?: string;
 		orgSlug?: string;
@@ -30,6 +32,9 @@ interface YamlSettings {
 			envKey: string;
 		}>;
 	};
+	jiraStatuses?: Array<{ label: string; colorToken: string }>;
+	prStatuses?: string[];
+	selfRepo?: { owner: string; repo: string };
 	claudePrompt?: {
 		default?: string;
 		basePath?: string;
@@ -60,8 +65,8 @@ function loadSettings(): YamlSettings {
 	}
 
 	if (!settings.jira?.email) throw new Error('settings.yml: jira.email is required');
-	if (!settings.gitlab?.authorUsername)
-		throw new Error('settings.yml: gitlab.authorUsername is required');
+	if (!settings.team && !settings.gitlab?.authorUsername)
+		throw new Error('settings.yml: gitlab.authorUsername is required (or define a team)');
 
 	return settings;
 }
@@ -86,6 +91,7 @@ export interface DashboardConfig {
 		repo: string;
 		authorUsername: string;
 	} | null;
+	team: TeamMember[];
 	amplitude: {
 		baseUrl: string;
 		orgSlug: string;
@@ -94,6 +100,9 @@ export interface DashboardConfig {
 			envKey: string;
 		}>;
 	};
+	jiraStatuses: Array<{ label: string; colorToken: string }>;
+	prStatuses: string[];
+	selfRepo: { owner: string; repo: string } | null;
 	claudePrompt: {
 		default: string;
 		basePath: string;
@@ -113,9 +122,21 @@ export interface DashboardConfig {
 	};
 }
 
+function buildTeam(settings: YamlSettings): TeamMember[] {
+	if (settings.team && settings.team.length > 0) return settings.team;
+	return [
+		{
+			jiraEmail: settings.jira?.email,
+			gitlabAuthorUsername: settings.gitlab?.authorUsername,
+			githubAuthorUsername: settings.github?.authorUsername
+		}
+	];
+}
+
 export function getConfig(): DashboardConfig {
 	const settings = loadSettings();
 	return {
+		team: buildTeam(settings),
 		jira: {
 			baseUrl: settings.jira!.baseUrl!,
 			email: settings.jira!.email!,
@@ -142,6 +163,11 @@ export function getConfig(): DashboardConfig {
 			orgSlug: settings.amplitude?.orgSlug ?? '',
 			projects: settings.amplitude?.projects ?? []
 		},
+		jiraStatuses: settings.jiraStatuses ?? [],
+		prStatuses: settings.prStatuses ?? [],
+		selfRepo: settings.selfRepo?.owner && settings.selfRepo?.repo
+			? { owner: settings.selfRepo.owner, repo: settings.selfRepo.repo }
+			: null,
 		claudePrompt: {
 			default: settings.claudePrompt!.default!,
 			basePath: settings.claudePrompt!.basePath!,
