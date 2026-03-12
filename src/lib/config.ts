@@ -25,6 +25,10 @@ interface YamlSettings {
 	amplitude?: {
 		baseUrl?: string;
 		orgSlug?: string;
+		projects?: Array<{
+			name: string;
+			envKey: string;
+		}>;
 	};
 	claudePrompt?: {
 		default?: string;
@@ -85,6 +89,10 @@ export interface DashboardConfig {
 	amplitude: {
 		baseUrl: string;
 		orgSlug: string;
+		projects: Array<{
+			name: string;
+			envKey: string;
+		}>;
 	};
 	claudePrompt: {
 		default: string;
@@ -131,7 +139,8 @@ export function getConfig(): DashboardConfig {
 			: null,
 		amplitude: {
 			baseUrl: settings.amplitude!.baseUrl!,
-			orgSlug: settings.amplitude?.orgSlug ?? ''
+			orgSlug: settings.amplitude?.orgSlug ?? '',
+			projects: settings.amplitude?.projects ?? []
 		},
 		claudePrompt: {
 			default: settings.claudePrompt!.default!,

@@ -4,18 +4,25 @@ import { fetchFlagByKey, patchFlagSegments } from "$lib/api/amplitude";
 import { getConfig } from "$lib/config";
 import type { AmplitudeTargetSegment } from "$lib/types";
 
-export async function GET({ params }) {
-  const apiKey = env.AMPLITUDE_MANAGEMENT_KEY;
-  if (!apiKey) {
-    return json(
-      { error: "AMPLITUDE_MANAGEMENT_KEY not configured" },
-      { status: 500 },
-    );
+function resolveProject(projectName: string) {
+  const { amplitude } = getConfig();
+  const cfg = amplitude.projects.find((p) => p.name === projectName);
+  if (!cfg) return null;
+  const apiKey = env[cfg.envKey] ?? "";
+  return apiKey ? { name: cfg.name, apiKey } : null;
+}
+
+export async function GET({ params, url }) {
+  const { amplitude } = getConfig();
+  const projectName = url.searchParams.get("projectName");
+  const project = projectName ? resolveProject(projectName) : null;
+
+  if (!project) {
+    return json({ error: "Project not found" }, { status: 400 });
   }
 
   try {
-    const { amplitude } = getConfig();
-    const flag = await fetchFlagByKey(params.param, apiKey, amplitude.baseUrl);
+    const flag = await fetchFlagByKey(params.param, project.apiKey, amplitude.baseUrl);
     return json(flag);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to fetch flag";
@@ -24,24 +31,22 @@ export async function GET({ params }) {
 }
 
 export async function PATCH({ params, request }) {
-  const apiKey = env.AMPLITUDE_MANAGEMENT_KEY;
-  if (!apiKey) {
-    return json(
-      { error: "AMPLITUDE_MANAGEMENT_KEY not configured" },
-      { status: 500 },
-    );
-  }
+  const { amplitude } = getConfig();
 
   const body = (await request.json()) as {
     targetSegments: AmplitudeTargetSegment[];
     flagKey: string;
+    projectName: string;
   };
 
-  try {
-    const { amplitude } = getConfig();
-    await patchFlagSegments(params.param, body.targetSegments, apiKey, amplitude.baseUrl);
+  const project = resolveProject(body.projectName);
+  if (!project) {
+    return json({ error: "Project not found" }, { status: 400 });
+  }
 
-    const updated = await fetchFlagByKey(body.flagKey, apiKey, amplitude.baseUrl);
+  try {
+    await patchFlagSegments(params.param, body.targetSegments, project.apiKey, amplitude.baseUrl);
+    const updated = await fetchFlagByKey(body.flagKey, project.apiKey, amplitude.baseUrl);
     return json(updated);
   } catch (err) {
     const message = err instanceof Error ? err.message : "PATCH failed";

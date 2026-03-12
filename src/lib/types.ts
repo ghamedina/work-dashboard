@@ -59,6 +59,7 @@ export interface AmplitudeTargetSegment {
 export interface AmplitudeFlag {
 	id: string;
 	projectId: string;
+	projectName: string;
 	key: string;
 	name: string;
 	enabled: boolean;
@@ -72,12 +73,19 @@ export interface MRComment {
 	webUrl: string;
 }
 
+export interface FlagSwitcherProjectData {
+	segmentName: string;
+	email: string;
+}
+
 export interface FlagSwitcherRowData {
 	id: string;
 	flagKey: string;
+	projectId: string;
 	flag: AmplitudeFlag | null;
 	segmentName: string;
 	email: string;
+	projectData: Record<string, FlagSwitcherProjectData>;
 }
 
 export interface JiraDetail {

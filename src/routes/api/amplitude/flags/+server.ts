@@ -4,32 +4,55 @@ import { fetchAllFlags } from "$lib/api/amplitude";
 import { getConfig } from "$lib/config";
 import type { AmplitudeFlag } from "$lib/types";
 
-let cachedFlags: AmplitudeFlag[] | null = null;
-let cacheTime = 0;
+interface CachedEntry {
+  flags: AmplitudeFlag[];
+  time: number;
+}
+
+const cache = new Map<string, CachedEntry>();
 const CACHE_TTL = 5 * 60 * 1000;
 
+function resolveProjects() {
+  const { amplitude } = getConfig();
+  return amplitude.projects
+    .map((p) => ({ name: p.name, apiKey: env[p.envKey] ?? "" }))
+    .filter((p) => p.apiKey.length > 0);
+}
+
 export async function GET() {
-  const apiKey = env.AMPLITUDE_MANAGEMENT_KEY;
-  if (!apiKey) {
+  const { amplitude } = getConfig();
+  const projects = resolveProjects();
+
+  if (projects.length === 0) {
     return json(
-      { error: "AMPLITUDE_MANAGEMENT_KEY not configured" },
+      { error: "No amplitude projects configured (check settings.yml and .env)" },
       { status: 500 },
     );
   }
 
   const now = Date.now();
-  if (cachedFlags && now - cacheTime < CACHE_TTL) {
-    return json(cachedFlags);
-  }
+  const results: AmplitudeFlag[] = [];
 
-  try {
-    const { amplitude } = getConfig();
-    cachedFlags = await fetchAllFlags(apiKey, amplitude.baseUrl);
-    cacheTime = now;
-    return json(cachedFlags);
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to fetch flags";
-    return json({ error: message }, { status: 502 });
-  }
+  await Promise.all(
+    projects.map(async (project) => {
+      const cached = cache.get(project.name);
+      if (cached && now - cached.time < CACHE_TTL) {
+        results.push(...cached.flags);
+        return;
+      }
+
+      try {
+        const flags = await fetchAllFlags(project.apiKey, amplitude.baseUrl);
+        for (const flag of flags) {
+          (flag as AmplitudeFlag & { projectName: string }).projectName = project.name;
+        }
+        cache.set(project.name, { flags, time: now });
+        results.push(...flags);
+      } catch (err) {
+        console.error(`Failed to fetch flags for project "${project.name}":`, err);
+      }
+    })
+  );
+
+  return json(results);
 }
