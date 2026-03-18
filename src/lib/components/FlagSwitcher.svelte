@@ -5,7 +5,8 @@
 	import Button from './Button.svelte';
 	import Table from './Table.svelte';
 	import TableHeaderRow from './TableHeaderRow.svelte';
-  import Container from './Container.svelte';
+	import Container from './Container.svelte';
+	import { createDragReorder } from '$lib/drag-reorder.svelte';
 
 	interface Props {
 		amplitudeOrgSlug: string;
@@ -14,8 +15,11 @@
 	let { amplitudeOrgSlug }: Props = $props();
 
 	const STORAGE_KEY = 'flagSwitcherRows';
+	const DEFAULT_PROJECT = 'housecall.io_development';
 
-	type PersistedRow = Pick<FlagSwitcherRowData, 'id' | 'flagKey' | 'segmentName' | 'email'>;
+	type PersistedRow = Pick<FlagSwitcherRowData, 'id' | 'flagKey' | 'projectId' | 'segmentName' | 'email'> & {
+		projectData?: Record<string, { segmentName: string; email: string }>;
+	};
 
 	let rows = $state<FlagSwitcherRowData[]>([]);
 	let flags = $state<AmplitudeFlag[]>([]);
@@ -24,12 +28,39 @@
 	let localProEmail = $state<string | null>(null);
 	let copied = $state(false);
 
+	// Unique projects derived from flags (server tags each flag with projectName)
+	let allProjects = $derived.by(() => {
+		const seen = new Map<string, string>();
+		for (const f of flags) {
+			if (!seen.has(f.projectName)) seen.set(f.projectName, f.projectId);
+		}
+		return [...seen.entries()]
+			.map(([name, id]) => ({ name, id }))
+			.sort((a, b) => a.name.localeCompare(b.name));
+	});
+
+	// Migrate old numeric project IDs to project names
+	function migrateProjectId(projectId: string | undefined): string {
+		if (!projectId) return DEFAULT_PROJECT;
+		// Old data stored numeric IDs like "217854"; new data stores names like "housecall.io_development"
+		if (/^\d+$/.test(projectId)) return DEFAULT_PROJECT;
+		return projectId;
+	}
+
 	onMount(() => {
 		const stored = localStorage.getItem(STORAGE_KEY);
 		if (stored) {
 			try {
 				const parsed = JSON.parse(stored) as PersistedRow[];
-				rows = parsed.map((r) => ({ ...r, flag: null }));
+				rows = parsed.map((r) => {
+					const pid = migrateProjectId(r.projectId);
+					// Migrate: seed projectData from existing segment/email if not present
+					const projectData = r.projectData ?? {};
+					if (r.segmentName || r.email) {
+						projectData[pid] = projectData[pid] ?? { segmentName: r.segmentName ?? '', email: r.email ?? '' };
+					}
+					return { ...r, projectId: pid, projectData, flag: null };
+				});
 			} catch {
 				// ignore malformed storage
 			}
@@ -73,11 +104,13 @@
 	}
 
 	function persistRows() {
-		const toStore: PersistedRow[] = rows.map(({ id, flagKey, segmentName, email }) => ({
+		const toStore = rows.map(({ id, flagKey, projectId, segmentName, email, projectData }) => ({
 			id,
 			flagKey,
+			projectId,
 			segmentName,
-			email
+			email,
+			projectData
 		}));
 		localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
 	}
@@ -88,9 +121,11 @@
 			{
 				id: crypto.randomUUID(),
 				flagKey: '',
+				projectId: DEFAULT_PROJECT,
 				flag: null,
 				segmentName: '',
-				email: ''
+				email: '',
+				projectData: {}
 			}
 		];
 		persistRows();
@@ -110,8 +145,10 @@
 		const clone: FlagSwitcherRowData = {
 			id: crypto.randomUUID(),
 			flagKey: source.flagKey,
+			projectId: source.projectId,
 			segmentName: source.segmentName,
 			email: source.email,
+			projectData: { ...source.projectData },
 			flag: null
 		};
 		const idx = rows.findIndex((r) => r.id === source.id);
@@ -124,6 +161,16 @@
 		rows = [];
 		localStorage.removeItem(STORAGE_KEY);
 	}
+
+	// --- Drag & Drop reordering ---
+	const drag = createDragReorder({
+		items: () => rows,
+		getKey: (r) => r.id,
+		onReorder(next) {
+			rows = next;
+			persistRows();
+		}
+	});
 </script>
 
 <Container>
@@ -163,7 +210,9 @@
 	{#if rows.length > 0}
 		<Table>
 			<TableHeaderRow>
-				<th>Flag Key</th>
+				<th class="col-drag"></th>
+				<th class="col-flag-key">Flag Key</th>
+				<th>Project</th>
 				<th>Segment</th>
 				<th>Email</th>
 				<th>Status</th>
@@ -175,10 +224,17 @@
 					<FlagSwitcherRow
 						{row}
 						{flags}
+						{allProjects}
 						{amplitudeOrgSlug}
 						onUpdate={updateRow}
 						onRemove={() => removeRow(row.id)}
 						onClone={cloneRow}
+						isDragOver={drag.dragOverKey === row.id}
+						onDragStart={() => drag.start(row.id)}
+						onDragOver={(e) => drag.over(e, row.id)}
+						onDragLeave={drag.leave}
+						onDrop={() => drag.drop(row.id)}
+						onDragEnd={drag.end}
 					/>
 				{/each}
 			</tbody>
@@ -198,6 +254,7 @@
 		padding: 10px 16px;
 		border-bottom: 1px solid var(--color-border);
 		background: var(--color-surface);
+		border-radius: var(--radius) var(--radius) 0 0;
 	}
 
 	.flag-switcher-title {
@@ -285,5 +342,14 @@
 		color: var(--color-text-muted);
 		white-space: nowrap;
 		padding: 8px 12px;
+	}
+
+	.col-drag {
+		width: 28px;
+		padding: 0;
+	}
+
+	.col-flag-key {
+		min-width: 280px;
 	}
 </style>

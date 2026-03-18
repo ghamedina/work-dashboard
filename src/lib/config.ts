@@ -27,6 +27,10 @@ interface YamlSettings {
 	amplitude?: {
 		baseUrl?: string;
 		orgSlug?: string;
+		projects?: Array<{
+			name: string;
+			envKey: string;
+		}>;
 	};
 	jiraStatuses?: Array<{ label: string; colorToken: string }>;
 	prStatuses?: string[];
@@ -91,6 +95,10 @@ export interface DashboardConfig {
 	amplitude: {
 		baseUrl: string;
 		orgSlug: string;
+		projects: Array<{
+			name: string;
+			envKey: string;
+		}>;
 	};
 	jiraStatuses: Array<{ label: string; colorToken: string }>;
 	prStatuses: string[];
@@ -152,7 +160,8 @@ export function getConfig(): DashboardConfig {
 			: null,
 		amplitude: {
 			baseUrl: settings.amplitude!.baseUrl!,
-			orgSlug: settings.amplitude?.orgSlug ?? ''
+			orgSlug: settings.amplitude?.orgSlug ?? '',
+			projects: settings.amplitude?.projects ?? []
 		},
 		jiraStatuses: settings.jiraStatuses ?? [],
 		prStatuses: settings.prStatuses ?? [],

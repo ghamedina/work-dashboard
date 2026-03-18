@@ -45,11 +45,18 @@ github:
 #     gitlabAuthorUsername: bob.gitlab
 
 # ─── Amplitude ────────────────────────────────────────────────────────────────
-# Base URL for the Amplitude Experiment Management API.
-# You generally don't need to change this.
+# Amplitude Experiment Management API. Each project needs its own API key.
+# API keys go in .env — only the project name and env var reference go here.
 amplitude:
   baseUrl: https://experiment.amplitude.com/api/1
   orgSlug: your-amplitude-org-slug          # Found in your Amplitude dashboard URL
+  # Each entry maps a project name to the env var holding its Management API key.
+  # Find keys at: https://app.amplitude.com/experiment → Settings → API Keys (per project)
+  projects:
+    - name: your-project_development        # Human-readable project name (shown in the UI)
+      envKey: AMPLITUDE_MANAGEMENT_KEY_DEV  # Env var name in .env holding the API key
+    - name: your-project_production
+      envKey: AMPLITUDE_MANAGEMENT_KEY_PROD
 
 # ─── Claude Launcher ──────────────────────────────────────────────────────────
 # Configures the "Open in Claude" button on each Jira row.

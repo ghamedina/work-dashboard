@@ -20,7 +20,7 @@ export async function fetchJiraWorkItems(config: DashboardConfig): Promise<JiraW
 		jiraEmails.length > 0
 			? `assignee in (${jiraEmails.map((e) => `"${e}"`).join(', ')})`
 			: 'assignee = currentUser()';
-	const jql = `${assigneeClause} AND project in (${projectList}) AND status not in (Done, Closed, Resolved)`;
+	const jql = `${assigneeClause} AND project in (${projectList}) AND sprint in openSprints()`;
 	const fields = 'key,summary,status';
 
 	const url = `${config.jira.baseUrl}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&fields=${fields}`;
@@ -49,4 +49,40 @@ export async function fetchJiraWorkItems(config: DashboardConfig): Promise<JiraW
 		status: issue.fields.status.name,
 		url: `${config.jira.baseUrl}/browse/${issue.key}`
 	}));
+}
+
+interface JiraProjectStatusesResponse {
+	name: string;
+	statuses: Array<{ name: string }>;
+}
+
+export async function fetchJiraProjectStatuses(config: DashboardConfig): Promise<string[]> {
+	const credentials = Buffer.from(`${config.jira.email}:${config.jira.apiToken}`).toString(
+		'base64'
+	);
+
+	const allStatuses = new Set<string>();
+
+	await Promise.all(
+		config.jira.projectKeys.map(async (projectKey) => {
+			const url = `${config.jira.baseUrl}/rest/api/3/project/${projectKey}/statuses`;
+			const response = await fetch(url, {
+				headers: {
+					Authorization: `Basic ${credentials}`,
+					Accept: 'application/json'
+				}
+			});
+
+			if (!response.ok) return;
+
+			const data: JiraProjectStatusesResponse[] = await response.json();
+			for (const issueType of data) {
+				for (const status of issueType.statuses) {
+					allStatuses.add(status.name);
+				}
+			}
+		})
+	);
+
+	return [...allStatuses].sort();
 }

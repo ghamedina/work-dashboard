@@ -84,6 +84,7 @@ export interface AmplitudeTargetSegment {
 export interface AmplitudeFlag {
 	id: string;
 	projectId: string;
+	projectName: string;
 	key: string;
 	name: string;
 	enabled: boolean;
@@ -97,12 +98,19 @@ export interface MRComment {
 	webUrl: string;
 }
 
+export interface FlagSwitcherProjectData {
+	segmentName: string;
+	email: string;
+}
+
 export interface FlagSwitcherRowData {
 	id: string;
 	flagKey: string;
+	projectId: string;
 	flag: AmplitudeFlag | null;
 	segmentName: string;
 	email: string;
+	projectData: Record<string, FlagSwitcherProjectData>;
 }
 
 export interface JiraDetail {
@@ -118,4 +126,16 @@ export interface JiraDetail {
 	updated: string;
 	linkedIssues: Array<{ type: string; key: string; summary: string; status: string; url: string }>;
 	comments: Array<{ author: string; body: string; created: string }>;
+}
+
+export type BadgeVariant = 'primary' | 'success' | 'warning' | 'danger' | 'purple' | 'gray';
+
+export function jiraStatusVariant(status: string): BadgeVariant {
+	const s = status.toLowerCase();
+	if (s.includes('progress')) return 'primary';
+	if (s.includes('review')) return 'purple';
+	if (s.includes('done') || s.includes('closed') || s.includes('resolved')) return 'success';
+	if (s.includes('blocked')) return 'danger';
+	if (s.includes('open') || s.includes('to do') || s.includes('backlog')) return 'warning';
+	return 'gray';
 }

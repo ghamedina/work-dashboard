@@ -9,8 +9,13 @@
 	import ModalContainer from './ModalContainer.svelte';
 	import DropdownMenu from './DropdownMenu.svelte';
 	import ClaudePicker from './ClaudePicker.svelte';
+	import DragHandle from './DragHandle.svelte';
+	import { createDragReorder, applyPersistedOrder, persistOrder } from '$lib/drag-reorder.svelte';
 	import QaStatusBadge from './QaStatusBadge.svelte';
 	import BadgeButton from './BadgeButton.svelte';
+
+	const ROW_ORDER_KEY = 'dashboard-row-order';
+	const getRowKey = (r: DashboardRow) => r.jiraItem.key;
 
 	interface Props {
 		rows: DashboardRow[];
@@ -22,7 +27,7 @@
 
 	let { rows, mode, gitlabUnavailable = false, jiraStatuses = [], prStatuses = [] }: Props = $props();
 
-	let localRows = $state(untrack(() => [...rows]));
+	let localRows = $state<DashboardRow[]>([]);
 
 	type SortKey = 'workItem' | 'status' | 'mr' | 'mrStatus' | 'qaStatus';
 	type SortDir = 'asc' | 'desc';
@@ -229,6 +234,7 @@
 
 	type BadgeVariant = 'primary' | 'success' | 'warning' | 'danger' | 'purple' | 'gray';
 
+
 	function prStatusVariant(pr: UnifiedPR): BadgeVariant {
 		if (pr.state === 'draft') return 'gray';
 		if (pr.state === 'open') return 'success';
@@ -327,6 +333,33 @@
 		}, 3000);
 	}
 
+	// --- Drag & Drop reordering ---
+	const drag = createDragReorder({
+		items: () => localRows,
+		getKey: getRowKey,
+		onReorder(next) {
+			localRows = next;
+			persistOrder(localRows, ROW_ORDER_KEY, getRowKey);
+		}
+	});
+
+	function handleDragStart(key: string) {
+		if (sortKey !== null) {
+			// Snap localRows to the current sorted visual order before dragging
+			localRows = [...sortedRows];
+			sortKey = null;
+			sortDir = 'asc';
+			try { localStorage.removeItem(SORT_STORAGE_KEY); } catch {}
+		}
+		drag.start(key);
+	}
+
+	// Apply persisted order when rows prop changes (including initial load)
+	$effect(() => {
+		void rows;
+		localRows = untrack(() => applyPersistedOrder([...rows], ROW_ORDER_KEY, getRowKey));
+	});
+
 	let expandedKeys = $state(new Set<string>());
 
 	async function toggleExpand(key: string) {
@@ -411,6 +444,7 @@
 <div class={`table-container mode-${mode}`}>
 	<Table>
 		<TableHeaderRow>
+			<th class="col-drag"></th>
 			<th class="col-action"></th>
 			<th>
 				<button class="sort-btn" onclick={() => toggleSort('workItem')}>
@@ -466,7 +500,17 @@
 				{@const claudeState = claudeStates[row.jiraItem.key] ?? 'idle'}
 				{@const rowCount = Math.max(row.prs.length, 1)}
 				{@const firstPR = row.prs[0] ?? null}
-				<TableBodyRow>
+				<TableBodyRow
+					isDragOver={drag.dragOverKey === row.jiraItem.key}
+					onDragOver={(e) => drag.over(e, row.jiraItem.key)}
+					onDragLeave={drag.leave}
+					onDrop={() => drag.drop(row.jiraItem.key)}
+				>
+					<DragHandle
+						rowspan={rowCount}
+						onDragStart={() => handleDragStart(row.jiraItem.key)}
+						onDragEnd={drag.end}
+					/>
 					<td rowspan={rowCount} class="cell-action">
 						<div class="action-btns">
 							<button
@@ -822,6 +866,11 @@
 
 	.mode-relaxed td {
 		padding: 14px 12px;
+	}
+
+	.col-drag {
+		width: 28px;
+		padding: 0;
 	}
 
 	.col-action {

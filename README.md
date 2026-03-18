@@ -8,7 +8,7 @@ A personal engineering dashboard that surfaces your active Jira work items along
 - **CI pipeline status** — shows pass/fail/running status per MR
 - **Claude Code launcher** — open any Jira ticket in a new terminal window running `claude`, pre-loaded with ticket context and a configurable prompt
 - **Repo picker** — choose which local repo to open Claude in; supports glob patterns to auto-discover all projects under a directory
-- **Amplitude flag switcher** — view and toggle feature flags via the Amplitude Management API
+- **Amplitude flag switcher** — view and toggle feature flags across multiple Amplitude projects via the Management API; switch between projects (e.g. development vs production) without losing your segment/email selections
 - **Three density modes** — summary, compact, relaxed
 - **Streamed loading** — each data source loads independently; no full-page spinner
 
@@ -33,7 +33,8 @@ cp .env.example .env
 | `JIRA_EMAIL`               | Your Jira account email                                                      |
 | `JIRA_TOKEN`               | Jira API token — generate at [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens) |
 | `GITLAB_TOKEN`             | GitLab personal access token (`read_api` scope minimum) — generate at your GitLab instance under Settings → Access Tokens |
-| `AMPLITUDE_MANAGEMENT_KEY` | Amplitude Management API key — find at [app.amplitude.com/experiment](https://app.amplitude.com/experiment) → Settings → API Keys _(optional — only needed for flag switcher)_ |
+| `AMPLITUDE_MANAGEMENT_KEY_DEV` | Amplitude Management API key for your **development** project — find at [app.amplitude.com/experiment](https://app.amplitude.com/experiment) → Settings → API Keys _(optional — only needed for flag switcher)_ |
+| `AMPLITUDE_MANAGEMENT_KEY_PROD` | Amplitude Management API key for your **production** project _(optional)_ |
 
 ### 3. Configure settings
 
@@ -49,7 +50,7 @@ cp settings.yml.example settings.yml
 | -------------- | ------------------------------------------------------------------ |
 | `jira`         | Jira base URL, email, and project keys to filter issues            |
 | `gitlab`       | GitLab base URL, project ID, repo path, and your username          |
-| `amplitude`    | Amplitude API base URL                                             |
+| `amplitude`    | Amplitude API base URL, org slug, and project list with env key references |
 | `claudePrompt` | Prompts available in the Claude launcher; which one is the default |
 | `repoPath`     | Repos available in the repo picker; which one is pre-selected      |
 | `terminal`     | Terminal app (`Terminal` or `iTerm2`) and shell settings           |
