@@ -9,7 +9,17 @@ import {
 } from '$lib/api/gitlab';
 import type { CIPipelineInfo } from '$lib/api/gitlab';
 import { fetchGitHubPRs, fetchGitHubReviewRequests } from '$lib/api/github';
-import type { DashboardRow, GitLabMR, ReviewItem, UnifiedPR } from '$lib/types';
+import { fetchSlackTodos } from '$lib/api/slack';
+import { fetchStarredPages } from '$lib/api/confluence';
+import type {
+	ConfluenceStarredPage,
+	DashboardRow,
+	GitLabMR,
+	ReviewItem,
+	ReviewsData,
+	SlackTodo,
+	UnifiedPR
+} from '$lib/types';
 
 type ApiResult<T> = { data: T; error: null } | { data: null; error: string };
 
@@ -118,16 +128,54 @@ export const load: PageServerLoad = () => {
 		)
 	);
 
-	const reviews: Promise<ApiResult<ReviewItem[]>> = resilient(
-		Promise.all([
-			config.github.length > 0 ? fetchGitHubReviewRequests(config).catch(() => [] as ReviewItem[]) : Promise.resolve([] as ReviewItem[]),
-			fetchGitLabReviewRequests(config).catch(() => [] as ReviewItem[])
-		]).then(([gh, gl]) => [...gh, ...gl])
+	const reviews: Promise<ApiResult<ReviewsData>> = resilient(
+		(async () => {
+			const items: ReviewItem[] = [];
+			const errors: ReviewsData['errors'] = [];
+
+			if (config.github.length > 0) {
+				try {
+					const gh = await fetchGitHubReviewRequests(config);
+					items.push(...gh.reviews);
+					for (const e of gh.errors) {
+						errors.push({ source: `GitHub ${e.repo}`, message: e.message });
+					}
+				} catch (err) {
+					errors.push({
+						source: 'GitHub',
+						message: err instanceof Error ? err.message : String(err)
+					});
+				}
+			}
+
+			try {
+				const gl = await fetchGitLabReviewRequests(config);
+				items.push(...gl);
+			} catch (err) {
+				errors.push({
+					source: `GitLab ${config.gitlab.repo}`,
+					message: err instanceof Error ? err.message : String(err)
+				});
+			}
+
+			return { items, errors };
+		})()
 	);
+
+	const slackTodos: Promise<ApiResult<SlackTodo[]>> = config.slack
+		? resilient(fetchSlackTodos(config))
+		: Promise.resolve({ data: [] as SlackTodo[], error: null });
+
+	const docsReviews: Promise<ApiResult<ConfluenceStarredPage[]>> = config.confluence
+		? resilient(fetchStarredPages(config))
+		: Promise.resolve({ data: [] as ConfluenceStarredPage[], error: null });
 
 	return {
 		amplitudeOrgSlug: config.amplitude.orgSlug,
 		githubConfigured: config.github.length > 0,
+		slackConfigured: config.slack !== null,
+		confluenceConfigured: config.confluence !== null,
+		slackEmojiName: config.slack?.emojiName ?? 'todo',
 		jiraStatuses: config.jiraStatuses,
 		prStatuses: config.prStatuses,
 		streamed: {
@@ -137,6 +185,8 @@ export const load: PageServerLoad = () => {
 			gitlabVpnError,
 			rows,
 			reviews,
+			slackTodos,
+			docsReviews,
 			jiraStatuses: jiraStatusesPromise
 		}
 	};

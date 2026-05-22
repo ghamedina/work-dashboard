@@ -3,13 +3,14 @@
 	import TableHeaderRow from './TableHeaderRow.svelte';
 	import TableBodyRow from './TableBodyRow.svelte';
 	import BadgeButton from './BadgeButton.svelte';
-	import type { ReviewItem, ReviewState } from '$lib/types';
+	import type { ReviewItem, ReviewSourceError, ReviewState } from '$lib/types';
 
 	interface Props {
 		reviews: ReviewItem[];
+		errors?: ReviewSourceError[];
 	}
 
-	let { reviews }: Props = $props();
+	let { reviews, errors = [] }: Props = $props();
 
 	function openLink(url: string) {
 		window.open(url, '_blank', 'noopener');
@@ -37,6 +38,17 @@
 <div class="reviews-header">
 	<h2>My Reviews{reviews.length > 0 ? ` (${reviews.length})` : ''}</h2>
 </div>
+
+{#if errors.length > 0}
+	<div class="error-banners">
+		{#each errors as e (e.source)}
+			<div class="error-banner">
+				<strong>{e.source}:</strong>
+				<span class="error-message">{e.message}</span>
+			</div>
+		{/each}
+	</div>
+{/if}
 
 <Table>
 	<TableHeaderRow>
@@ -181,5 +193,27 @@
 		padding: 24px;
 		color: var(--color-text-muted);
 		font-size: 12px;
+	}
+
+	.error-banners {
+		padding: 8px 16px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.error-banner {
+		font-size: 12px;
+		color: var(--color-danger);
+		background: var(--color-danger-muted);
+		padding: 6px 10px;
+		border-radius: var(--radius);
+	}
+
+	.error-message {
+		font-family: monospace;
+		font-size: 11px;
+		margin-left: 4px;
 	}
 </style>

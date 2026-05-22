@@ -78,6 +78,35 @@ export interface ReviewItem {
 	myReviewState: ReviewState;
 }
 
+export interface ReviewSourceError {
+	source: string;
+	message: string;
+}
+
+export interface ReviewsData {
+	items: ReviewItem[];
+	errors: ReviewSourceError[];
+}
+
+export interface SlackTodo {
+	channelId: string;
+	channelName: string;
+	authorName: string;
+	text: string;
+	permalink: string;
+	ts: string;
+	reactedAt: number;
+}
+
+export interface ConfluenceStarredPage {
+	id: string;
+	title: string;
+	spaceName: string;
+	webUrl: string;
+	starredAt: number;
+	starredAtIsApprox: boolean;
+}
+
 export interface AmplitudeSegmentCondition {
 	prop: string;
 	op: string;

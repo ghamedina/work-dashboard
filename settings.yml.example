@@ -48,6 +48,23 @@ github:
 #     jiraEmail: bob@company.com
 #     gitlabAuthorUsername: bob.gitlab
 
+# ─── Slack ────────────────────────────────────────────────────────────────────
+# Optional: show a "Slack Todos" tab listing Slack messages you reacted to
+# with a chosen emoji. Your token goes in .env as SLACK_TOKEN.
+# Omit this whole block to hide the tab.
+# slack:
+#   workspaceSubdomain: acme               # used to build https://acme.slack.com/... links
+#   emojiName: todo                        # bare emoji name, no colons
+#   since: "2026-05-15"                    # ISO date; only items reacted to on/after this
+
+# ─── Confluence ───────────────────────────────────────────────────────────────
+# Optional: show a "Doc Reviews" tab listing Confluence pages you've starred.
+# Reuses your Jira API token + email (same Atlassian basic auth).
+# Omit this whole block to hide the tab.
+# confluence:
+#   baseUrl: https://your-company.atlassian.net/wiki
+#   since: "2026-05-15"                    # ISO date; only pages starred on/after this
+
 # ─── Amplitude ────────────────────────────────────────────────────────────────
 # Amplitude Experiment Management API. Each project needs its own API key.
 # API keys go in .env — only the project name and env var reference go here.

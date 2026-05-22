@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse } from 'yaml';
 import { JIRA_TOKEN, GITLAB_TOKEN, GITHUB_TOKEN } from '$env/static/private';
+import { env as privateEnv } from '$env/dynamic/private';
 import type { TeamMember } from '$lib/types';
 
 export type TerminalChoice = 'Terminal' | 'iTerm2' | 'Warp';
@@ -23,6 +24,15 @@ interface YamlSettings {
 		repo?: string;
 		authorUsername?: string;
 	}>;
+	slack?: {
+		workspaceSubdomain?: string;
+		emojiName?: string;
+		since?: string;
+	};
+	confluence?: {
+		baseUrl?: string;
+		since?: string;
+	};
 	team?: TeamMember[];
 	amplitude?: {
 		baseUrl?: string;
@@ -91,6 +101,18 @@ export interface DashboardConfig {
 		repo: string;
 		authorUsername: string;
 	}>;
+	slack: {
+		token: string;
+		workspaceSubdomain: string;
+		emojiName: string;
+		since: string;
+	} | null;
+	confluence: {
+		token: string;
+		email: string;
+		baseUrl: string;
+		since: string;
+	} | null;
 	team: TeamMember[];
 	amplitude: {
 		baseUrl: string;
@@ -158,6 +180,22 @@ export function getConfig(): DashboardConfig {
 				repo: r.repo!,
 				authorUsername: r.authorUsername!
 			})),
+		slack: settings.slack?.workspaceSubdomain && settings.slack?.since
+			? {
+				token: privateEnv.SLACK_TOKEN ?? '',
+				workspaceSubdomain: settings.slack.workspaceSubdomain,
+				emojiName: settings.slack.emojiName ?? 'todo',
+				since: settings.slack.since
+			}
+			: null,
+		confluence: settings.confluence?.baseUrl && settings.confluence?.since
+			? {
+				token: JIRA_TOKEN,
+				email: settings.jira!.email!,
+				baseUrl: settings.confluence.baseUrl.replace(/\/$/, ''),
+				since: settings.confluence.since
+			}
+			: null,
 		amplitude: {
 			baseUrl: settings.amplitude!.baseUrl!,
 			orgSlug: settings.amplitude?.orgSlug ?? '',

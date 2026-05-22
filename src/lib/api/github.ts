@@ -210,13 +210,33 @@ interface GitHubReviewResponse {
 	submitted_at: string | null;
 }
 
+export interface GitHubReviewsResult {
+	reviews: ReviewItem[];
+	errors: Array<{ repo: string; message: string }>;
+}
+
 export async function fetchGitHubReviewRequests(
 	config: DashboardConfig
-): Promise<ReviewItem[]> {
-	const perRepo = await Promise.all(
+): Promise<GitHubReviewsResult> {
+	const settled = await Promise.allSettled(
 		config.github.map((repo) => fetchReviewRequestsForRepo(repo))
 	);
-	return perRepo.flat();
+
+	const reviews: ReviewItem[] = [];
+	const errors: Array<{ repo: string; message: string }> = [];
+
+	settled.forEach((result, i) => {
+		const repo = `${config.github[i].owner}/${config.github[i].repo}`;
+		if (result.status === 'fulfilled') {
+			reviews.push(...result.value);
+		} else {
+			const msg =
+				result.reason instanceof Error ? result.reason.message : String(result.reason);
+			errors.push({ repo, message: msg });
+		}
+	});
+
+	return { reviews, errors };
 }
 
 async function fetchReviewRequestsForRepo(

@@ -7,7 +7,7 @@
 
 	interface Props {
 		mode: RenderMode;
-		onReload: () => void;
+		onReload?: () => void;
 		statuses?: string[];
 		enabledStatuses?: Set<string>;
 		onToggleStatus?: (status: string) => void;
@@ -89,9 +89,11 @@
 				</Tooltip>
 			{/each}
 		</ButtonGroup>
-		<Tooltip text="Reload data">
-			<Button variant="icon" label="↻" ariaLabel="Reload data" onclick={onReload} />
-		</Tooltip>
+		{#if onReload}
+			<Tooltip text="Reload data">
+				<Button variant="icon" label="↻" ariaLabel="Reload data" onclick={onReload} />
+			</Tooltip>
+		{/if}
 	</div>
 </div>
 
