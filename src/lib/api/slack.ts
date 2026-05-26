@@ -45,11 +45,10 @@ interface SlackConversation {
 	user?: string;
 }
 
-interface SlackConversationsListResponse {
+interface SlackConversationsInfoResponse {
 	ok: boolean;
 	error?: string;
-	channels?: SlackConversation[];
-	response_metadata?: { next_cursor?: string };
+	channel?: SlackConversation;
 }
 
 interface SlackUser {
@@ -59,11 +58,10 @@ interface SlackUser {
 	profile?: { display_name?: string; real_name?: string };
 }
 
-interface SlackUsersListResponse {
+interface SlackUsersInfoResponse {
 	ok: boolean;
 	error?: string;
-	members?: SlackUser[];
-	response_metadata?: { next_cursor?: string };
+	user?: SlackUser;
 }
 
 export async function fetchSlackTodos(config: DashboardConfig): Promise<SlackTodo[]> {
@@ -76,7 +74,6 @@ export async function fetchSlackTodos(config: DashboardConfig): Promise<SlackTod
 	}
 
 	const myUserId = await fetchMyUserId(token);
-
 	const items = await fetchAllReactionItems(token);
 
 	const matching = items.filter((item) => {
@@ -91,10 +88,19 @@ export async function fetchSlackTodos(config: DashboardConfig): Promise<SlackTod
 
 	if (matching.length === 0) return [];
 
-	const [usersById, channelsById] = await Promise.all([
-		fetchUsersById(token),
-		fetchChannelsById(token)
-	]);
+	const channelIds = new Set<string>();
+	const userIds = new Set<string>();
+	for (const item of matching) {
+		if (item.channel) channelIds.add(item.channel);
+		if (item.message?.user) userIds.add(item.message.user);
+	}
+
+	const channelsById = await resolveChannels(token, [...channelIds]);
+	for (const ch of channelsById.values()) {
+		if (ch.is_im && ch.user) userIds.add(ch.user);
+	}
+
+	const usersById = await resolveUsers(token, [...userIds]);
 
 	const todos: SlackTodo[] = matching.map((item) => {
 		const message = item.message!;
@@ -148,43 +154,54 @@ async function fetchAllReactionItems(token: string): Promise<SlackReactionsListI
 	do {
 		const params: Record<string, string> = { limit: '200' };
 		if (cursor) params.cursor = cursor;
-		const data = await slackGet<SlackReactionsListResponse>(token, 'reactions.list', params);
-		if (data.items) items.push(...data.items);
-		cursor = data.response_metadata?.next_cursor || undefined;
+		try {
+			const data = await slackGet<SlackReactionsListResponse>(token, 'reactions.list', params);
+			if (data.items) items.push(...data.items);
+			cursor = data.response_metadata?.next_cursor || undefined;
+		} catch (err) {
+			// reactions.list is known-flaky deep into pagination (`internal_error` on
+			// older pages). Items are returned newest-first, so anything within the
+			// `since` window will be in the early pages — stop paginating instead of
+			// failing the whole fetch.
+			const msg = err instanceof Error ? err.message : String(err);
+			if (msg.includes('internal_error')) {
+				console.warn(`Slack reactions.list paginated to a flaky page (${msg}); returning ${items.length} items collected so far`);
+				break;
+			}
+			throw err;
+		}
 	} while (cursor);
 	return items;
 }
 
-async function fetchUsersById(token: string): Promise<Map<string, SlackUser>> {
-	const map = new Map<string, SlackUser>();
-	let cursor: string | undefined;
-	do {
-		const params: Record<string, string> = { limit: '200' };
-		if (cursor) params.cursor = cursor;
-		const data = await slackGet<SlackUsersListResponse>(token, 'users.list', params);
-		for (const m of data.members ?? []) map.set(m.id, m);
-		cursor = data.response_metadata?.next_cursor || undefined;
-	} while (cursor);
+async function resolveChannels(
+	token: string,
+	ids: string[]
+): Promise<Map<string, SlackConversation>> {
+	const results = await Promise.allSettled(
+		ids.map((id) =>
+			slackGet<SlackConversationsInfoResponse>(token, 'conversations.info', { channel: id })
+		)
+	);
+	const map = new Map<string, SlackConversation>();
+	results.forEach((r, i) => {
+		if (r.status === 'fulfilled' && r.value.channel) {
+			map.set(ids[i], r.value.channel);
+		}
+	});
 	return map;
 }
 
-async function fetchChannelsById(token: string): Promise<Map<string, SlackConversation>> {
-	const map = new Map<string, SlackConversation>();
-	let cursor: string | undefined;
-	do {
-		const params: Record<string, string> = {
-			limit: '200',
-			types: 'public_channel,private_channel,im,mpim'
-		};
-		if (cursor) params.cursor = cursor;
-		const data = await slackGet<SlackConversationsListResponse>(
-			token,
-			'conversations.list',
-			params
-		);
-		for (const c of data.channels ?? []) map.set(c.id, c);
-		cursor = data.response_metadata?.next_cursor || undefined;
-	} while (cursor);
+async function resolveUsers(token: string, ids: string[]): Promise<Map<string, SlackUser>> {
+	const results = await Promise.allSettled(
+		ids.map((id) => slackGet<SlackUsersInfoResponse>(token, 'users.info', { user: id }))
+	);
+	const map = new Map<string, SlackUser>();
+	results.forEach((r, i) => {
+		if (r.status === 'fulfilled' && r.value.user) {
+			map.set(ids[i], r.value.user);
+		}
+	});
 	return map;
 }
 
