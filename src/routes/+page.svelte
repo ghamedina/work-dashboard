@@ -7,6 +7,7 @@
 	import ReviewsTable from '$lib/components/ReviewsTable.svelte';
 	import SlackTodosCard from '$lib/components/SlackTodosCard.svelte';
 	import DocsReviewsCard from '$lib/components/DocsReviewsCard.svelte';
+	import WeeklyUpdateCard from '$lib/components/WeeklyUpdateCard.svelte';
 	import Tabs, { type TabDef } from '$lib/components/Tabs.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import FlagSwitcher from '$lib/components/FlagSwitcher.svelte';
@@ -36,6 +37,7 @@
 		const ids = ['work', 'reviews'];
 		if (data.slackConfigured) ids.push('slack');
 		if (data.confluenceConfigured) ids.push('docs');
+		if (data.managerConfigured) ids.push('manager');
 		return ids;
 	});
 
@@ -44,7 +46,8 @@
 			if (id === 'work') return { id, label: 'Work' };
 			if (id === 'reviews') return { id, label: 'Reviews', count: reviewsCount };
 			if (id === 'slack') return { id, label: 'Slack Todos', count: slackCount };
-			return { id, label: 'Doc Reviews', count: docsCount };
+			if (id === 'docs') return { id, label: 'Doc Reviews', count: docsCount };
+			return { id, label: 'My Manager' };
 		})
 	);
 
@@ -209,6 +212,12 @@
 					<p class="error-detail">{result.error}</p>
 				</div>
 			{/if}
+		{/await}
+	{:else if active === 'manager'}
+		{#await data.streamed.weekly}
+			<div class="panel-loading">Loading weekly update…</div>
+		{:then result}
+			<WeeklyUpdateCard week={result.week} teams={result.teams} />
 		{/await}
 	{/if}
 </Container>
