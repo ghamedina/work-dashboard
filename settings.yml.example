@@ -77,6 +77,22 @@ github:
 #   - name: Reporting
 #     # no jiraProjectKeys, no members → manual notes only
 
+# ─── Notion (for meetings summary in My Manager tab) ──────────────────────────
+# Optional: if you use Granola to take meeting notes and Granola is configured
+# to sync those notes into a Notion database, the My Manager tab can render an
+# LLM-summarized bullet list of this week's meetings.
+# Requires NOTION_TOKEN in .env (Notion internal integration token).
+# Omit this block to hide the meetings block.
+# notion:
+#   meetingsDbId: 00000000000000000000000000000000   # 32-char hex (Notion DB id)
+
+# ─── Claude CLI (for meetings summary synthesis) ──────────────────────────────
+# The dashboard shells out to your local Claude Code CLI to summarize meeting
+# notes. Uses your existing subscription auth — no API key needed.
+# claudeCli:
+#   binary: claude                                    # CLI command (or absolute path)
+#   model: claude-haiku-4-5                           # cheapest, fastest model
+
 # ─── Slack ────────────────────────────────────────────────────────────────────
 # Optional: show a "Slack Todos" tab listing Slack messages you reacted to
 # with a chosen emoji. Your token goes in .env as SLACK_TOKEN.
