@@ -61,7 +61,7 @@ async function fetchTeamJira(
 	const isoStart = weekStart.toISOString().slice(0, 10); // YYYY-MM-DD
 	const jql = `project IN (${projectClause}) AND assignee IN (${assigneeClause}) AND updated >= "${isoStart}"`;
 	const fields = 'key,summary,status,updated,assignee';
-	const url = `${config.jira.baseUrl}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&fields=${fields}&expand=changelog`;
+	const url = `${config.jira.baseUrl}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&fields=${fields}&expand=changelog&maxResults=100`;
 
 	const credentials = Buffer.from(`${config.jira.email}:${config.jira.apiToken}`).toString('base64');
 	const response = await fetch(url, {
@@ -146,6 +146,3 @@ export async function fetchWeeklyActivityForTeam(
 	const prs: WeeklyTeamActivity['prs'] = { merged: [], opened: [], updated: [] };
 	return { teamName: team.name, autoPull: true, jira, prs };
 }
-
-// Re-exported here so callers don't need to import directly:
-export type { WeeklyTeamActivity, WeeklyJiraTicket, WeeklyPR };
