@@ -141,6 +141,15 @@ interface GitLabMRResponse {
 	merged_at: string | null;
 }
 
+async function fetchMRPage(url: string, headers: Record<string, string>): Promise<GitLabMRResponse[]> {
+	const r = await fetch(url, { headers });
+	if (!r.ok) {
+		const body = await r.text().catch(() => '');
+		throw new Error(`GitLab MR fetch error ${r.status}: ${body}`);
+	}
+	return r.json();
+}
+
 async function fetchTeamGitLabPRs(
 	config: DashboardConfig,
 	team: TeamConfig,
@@ -157,14 +166,12 @@ async function fetchTeamGitLabPRs(
 
 	const perUser = await Promise.all(
 		usernames.map(async (u) => {
-			const url = `${baseUrl}?author_username=${encodeURIComponent(u)}&updated_after=${encodeURIComponent(isoStart)}&per_page=100`;
-			const r = await fetch(url, { headers });
-			if (!r.ok) {
-				const body = await r.text().catch(() => '');
-				throw new Error(`GitLab MR fetch error ${r.status}: ${body}`);
-			}
-			const mrs: GitLabMRResponse[] = await r.json();
-			return mrs;
+			const authorParam = `author_username=${encodeURIComponent(u)}&updated_after=${encodeURIComponent(isoStart)}&per_page=100`;
+			const [opened, merged] = await Promise.all([
+				fetchMRPage(`${baseUrl}?state=opened&${authorParam}`, headers),
+				fetchMRPage(`${baseUrl}?state=merged&${authorParam}`, headers)
+			]);
+			return [...opened, ...merged];
 		})
 	);
 
