@@ -214,10 +214,14 @@
 			{/if}
 		{/await}
 	{:else if active === 'manager'}
-		{#await data.streamed.weekly}
+		{#await Promise.all([data.streamed.weekly, data.streamed.meetingsSummary])}
 			<div class="panel-loading">Loading weekly update…</div>
-		{:then result}
-			<WeeklyUpdateCard week={result.week} teams={result.teams} />
+		{:then [weeklyResult, meetingsResult]}
+			<WeeklyUpdateCard
+				week={weeklyResult.week}
+				teams={weeklyResult.teams}
+				meetings={meetingsResult}
+			/>
 		{/await}
 	{/if}
 </Container>
