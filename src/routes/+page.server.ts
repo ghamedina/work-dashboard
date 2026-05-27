@@ -11,6 +11,9 @@ import type { CIPipelineInfo } from '$lib/api/gitlab';
 import { fetchGitHubPRs, fetchGitHubReviewRequests } from '$lib/api/github';
 import { fetchSlackTodos } from '$lib/api/slack';
 import { fetchStarredPages } from '$lib/api/confluence';
+import { fetchWeeklyActivityForTeam } from '$lib/api/managerWeekly';
+import { getCurrentIsoWeek } from '$lib/managerWeek';
+import type { IsoWeek } from '$lib/managerWeek';
 import type {
 	ConfluenceStarredPage,
 	DashboardRow,
@@ -18,7 +21,8 @@ import type {
 	ReviewItem,
 	ReviewsData,
 	SlackTodo,
-	UnifiedPR
+	UnifiedPR,
+	WeeklyTeamActivity
 } from '$lib/types';
 
 type ApiResult<T> = { data: T; error: null } | { data: null; error: string };
@@ -170,11 +174,27 @@ export const load: PageServerLoad = () => {
 		? resilient(fetchStarredPages(config))
 		: Promise.resolve({ data: [] as ConfluenceStarredPage[], error: null });
 
+	const week: IsoWeek = getCurrentIsoWeek();
+
+	type WeeklyTeamResult = { name: string; activity: ApiResult<WeeklyTeamActivity> };
+	const weekly: Promise<{ week: IsoWeek; teams: WeeklyTeamResult[] }> = (async () => {
+		const teams = await Promise.all(
+			config.teams.map(async (team): Promise<WeeklyTeamResult> => {
+				const activity = await resilient(
+					fetchWeeklyActivityForTeam(config, team, week.start, week.end)
+				);
+				return { name: team.name, activity };
+			})
+		);
+		return { week, teams };
+	})();
+
 	return {
 		amplitudeOrgSlug: config.amplitude.orgSlug,
 		githubConfigured: config.github.length > 0,
 		slackConfigured: config.slack !== null,
 		confluenceConfigured: config.confluence !== null,
+		managerConfigured: config.managerConfigured,
 		slackEmojiName: config.slack?.emojiName ?? 'todo',
 		jiraStatuses: config.jiraStatuses,
 		prStatuses: config.prStatuses,
@@ -187,6 +207,7 @@ export const load: PageServerLoad = () => {
 			reviews,
 			slackTodos,
 			docsReviews,
+			weekly,
 			jiraStatuses: jiraStatusesPromise
 		}
 	};
