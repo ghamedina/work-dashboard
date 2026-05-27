@@ -230,3 +230,21 @@ export interface WeeklyTeamResult {
 		| { data: WeeklyTeamActivity; error: null }
 		| { data: null; error: string };
 }
+
+export interface MeetingNote {
+	id: string;
+	title: string;
+	date: string;                  // ISO timestamp
+	attendees: string[];
+	notesPreview: string;          // ≤ 1500 chars, paragraph body of the Notion page
+	notionUrl: string;
+}
+
+export interface MeetingsSummary {
+	generatedAt: string;           // ISO timestamp of when synthesis ran
+	isoWeekYear: number;
+	isoWeekNumber: number;
+	bullets: string[];             // one bullet per meeting
+	meetingsCount: number;
+	meetings: MeetingNote[];       // kept for Open-in-Notion links and Phase 3 reuse
+}
