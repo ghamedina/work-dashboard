@@ -3,7 +3,7 @@ import { join } from 'path';
 import { parse } from 'yaml';
 import { JIRA_TOKEN, GITLAB_TOKEN, GITHUB_TOKEN } from '$env/static/private';
 import { env as privateEnv } from '$env/dynamic/private';
-import type { TeamMember } from '$lib/types';
+import type { TeamMember, TeamConfig } from '$lib/types';
 
 export type TerminalChoice = 'Terminal' | 'iTerm2' | 'Warp';
 
@@ -34,6 +34,11 @@ interface YamlSettings {
 		since?: string;
 	};
 	team?: TeamMember[];
+	teams?: Array<{
+		name?: string;
+		jiraProjectKeys?: string[];
+		members?: TeamMember[];
+	}>;
 	amplitude?: {
 		baseUrl?: string;
 		orgSlug?: string;
@@ -114,6 +119,8 @@ export interface DashboardConfig {
 		since: string;
 	} | null;
 	team: TeamMember[];
+	teams: TeamConfig[];
+	managerConfigured: boolean;
 	amplitude: {
 		baseUrl: string;
 		orgSlug: string;
@@ -155,10 +162,23 @@ function buildTeam(settings: YamlSettings): TeamMember[] {
 	];
 }
 
+function buildTeams(settings: YamlSettings): TeamConfig[] {
+	if (!settings.teams || settings.teams.length === 0) return [];
+	return settings.teams
+		.filter((t) => t.name)
+		.map((t) => ({
+			name: t.name!,
+			jiraProjectKeys: t.jiraProjectKeys ?? [],
+			members: t.members ?? []
+		}));
+}
+
 export function getConfig(): DashboardConfig {
 	const settings = loadSettings();
 	return {
 		team: buildTeam(settings),
+		teams: buildTeams(settings),
+		managerConfigured: (settings.teams ?? []).length > 0,
 		jira: {
 			baseUrl: settings.jira!.baseUrl!,
 			email: settings.jira!.email!,
