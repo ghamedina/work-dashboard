@@ -33,6 +33,13 @@ interface YamlSettings {
 		baseUrl?: string;
 		since?: string;
 	};
+	notion?: {
+		meetingsDbId?: string;
+	};
+	claudeCli?: {
+		binary?: string;
+		model?: string;
+	};
 	team?: TeamMember[];
 	teams?: Array<{
 		name?: string;
@@ -118,6 +125,15 @@ export interface DashboardConfig {
 		baseUrl: string;
 		since: string;
 	} | null;
+	notion: {
+		token: string;
+		meetingsDbId: string;
+	} | null;
+	notionConfigured: boolean;
+	claudeCli: {
+		binary: string;
+		model: string;
+	};
 	team: TeamMember[];
 	teams: TeamConfig[];
 	managerConfigured: boolean;
@@ -176,6 +192,11 @@ function buildTeams(settings: YamlSettings): TeamConfig[] {
 export function getConfig(): DashboardConfig {
 	const settings = loadSettings();
 	const teams = buildTeams(settings);
+	const notionDbId = settings.notion?.meetingsDbId;
+	const notionToken = privateEnv.NOTION_TOKEN ?? '';
+	if (notionDbId && !notionToken) {
+		throw new Error('settings.yml: notion.meetingsDbId is set but NOTION_TOKEN is missing from .env');
+	}
 	return {
 		team: buildTeam(settings),
 		teams,
@@ -217,6 +238,14 @@ export function getConfig(): DashboardConfig {
 				since: settings.confluence.since
 			}
 			: null,
+		notion: notionDbId
+			? { token: notionToken, meetingsDbId: notionDbId }
+			: null,
+		notionConfigured: !!notionDbId,
+		claudeCli: {
+			binary: settings.claudeCli?.binary ?? 'claude',
+			model: settings.claudeCli?.model ?? 'claude-haiku-4-5'
+		},
 		amplitude: {
 			baseUrl: settings.amplitude!.baseUrl!,
 			orgSlug: settings.amplitude?.orgSlug ?? '',
