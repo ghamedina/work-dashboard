@@ -22,7 +22,8 @@ import type {
 	ReviewsData,
 	SlackTodo,
 	UnifiedPR,
-	WeeklyTeamActivity
+	WeeklyTeamActivity,
+	WeeklyTeamResult
 } from '$lib/types';
 
 type ApiResult<T> = { data: T; error: null } | { data: null; error: string };
@@ -176,7 +177,6 @@ export const load: PageServerLoad = () => {
 
 	const week: IsoWeek = getCurrentIsoWeek();
 
-	type WeeklyTeamResult = { name: string; activity: ApiResult<WeeklyTeamActivity> };
 	const weekly: Promise<{ week: IsoWeek; teams: WeeklyTeamResult[] }> = (async () => {
 		const teams = await Promise.all(
 			config.teams.map(async (team): Promise<WeeklyTeamResult> => {

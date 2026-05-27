@@ -223,3 +223,10 @@ export interface WeeklyTeamActivity {
 		updated: WeeklyPR[];
 	} | null;
 }
+
+export interface WeeklyTeamResult {
+	name: string;
+	activity:
+		| { data: WeeklyTeamActivity; error: null }
+		| { data: null; error: string };
+}
