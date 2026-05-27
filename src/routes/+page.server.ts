@@ -12,12 +12,14 @@ import { fetchGitHubPRs, fetchGitHubReviewRequests } from '$lib/api/github';
 import { fetchSlackTodos } from '$lib/api/slack';
 import { fetchStarredPages } from '$lib/api/confluence';
 import { fetchWeeklyActivityForTeam } from '$lib/api/managerWeekly';
+import { getMeetingsSummary } from '$lib/api/meetingsSummary';
 import { getCurrentIsoWeek } from '$lib/managerWeek';
 import type { IsoWeek } from '$lib/managerWeek';
 import type {
 	ConfluenceStarredPage,
 	DashboardRow,
 	GitLabMR,
+	MeetingsSummary,
 	ReviewItem,
 	ReviewsData,
 	SlackTodo,
@@ -189,12 +191,17 @@ export const load: PageServerLoad = () => {
 		return { week, teams };
 	})();
 
+	const meetingsSummary: Promise<ApiResult<MeetingsSummary | null>> = config.notionConfigured
+		? resilient(getMeetingsSummary(config, week))
+		: Promise.resolve({ data: null, error: null } as ApiResult<MeetingsSummary | null>);
+
 	return {
 		amplitudeOrgSlug: config.amplitude.orgSlug,
 		githubConfigured: config.github.length > 0,
 		slackConfigured: config.slack !== null,
 		confluenceConfigured: config.confluence !== null,
 		managerConfigured: config.managerConfigured,
+		notionConfigured: config.notionConfigured,
 		slackEmojiName: config.slack?.emojiName ?? 'todo',
 		jiraStatuses: config.jiraStatuses,
 		prStatuses: config.prStatuses,
@@ -208,6 +215,7 @@ export const load: PageServerLoad = () => {
 			slackTodos,
 			docsReviews,
 			weekly,
+			meetingsSummary,
 			jiraStatuses: jiraStatusesPromise
 		}
 	};
