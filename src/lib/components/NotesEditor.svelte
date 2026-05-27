@@ -9,9 +9,19 @@
 	let value = $state('');
 	let loaded = $state(false);
 	let saveTimer: ReturnType<typeof setTimeout> | null = null;
+	let pendingWrite: { key: string; value: string } | null = null;
+
+	function writeToStorage(key: string, val: string) {
+		if (typeof localStorage === 'undefined') return;
+		try {
+			localStorage.setItem(key, val);
+		} catch {}
+	}
 
 	$effect(() => {
 		// Re-load whenever storageKey changes (e.g. ISO week rolls over).
+		// Svelte runs the previous effect's cleanup first, which flushes any
+		// pending write under the OLD storageKey before we read the new one.
 		if (typeof localStorage === 'undefined') return;
 		try {
 			value = localStorage.getItem(storageKey) ?? '';
@@ -19,18 +29,29 @@
 			value = '';
 		}
 		loaded = true;
-	});
 
-	function persist() {
-		if (typeof localStorage === 'undefined') return;
-		try {
-			localStorage.setItem(storageKey, value);
-		} catch {}
-	}
+		return () => {
+			if (saveTimer) {
+				clearTimeout(saveTimer);
+				saveTimer = null;
+			}
+			if (pendingWrite) {
+				writeToStorage(pendingWrite.key, pendingWrite.value);
+				pendingWrite = null;
+			}
+		};
+	});
 
 	function onInput() {
 		if (saveTimer) clearTimeout(saveTimer);
-		saveTimer = setTimeout(persist, 500);
+		pendingWrite = { key: storageKey, value };
+		saveTimer = setTimeout(() => {
+			if (pendingWrite) {
+				writeToStorage(pendingWrite.key, pendingWrite.value);
+				pendingWrite = null;
+			}
+			saveTimer = null;
+		}, 500);
 	}
 </script>
 
