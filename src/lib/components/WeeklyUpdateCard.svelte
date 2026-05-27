@@ -1,15 +1,17 @@
 <script lang="ts">
 	import TeamWeeklySection from './TeamWeeklySection.svelte';
+	import MeetingsSummaryBlock from './MeetingsSummaryBlock.svelte';
 	import { formatIsoWeekLabel } from '$lib/managerWeek';
 	import type { IsoWeek } from '$lib/managerWeek';
-	import type { WeeklyTeamResult } from '$lib/types';
+	import type { WeeklyTeamResult, MeetingsSummary } from '$lib/types';
 
 	interface Props {
 		week: IsoWeek;
 		teams: WeeklyTeamResult[];
+		meetings?: { data: MeetingsSummary | null; error: string | null };
 	}
 
-	let { week, teams }: Props = $props();
+	let { week, teams, meetings }: Props = $props();
 </script>
 
 <div class="card">
@@ -31,6 +33,10 @@
 				/>
 			{/each}
 		</div>
+	{/if}
+
+	{#if meetings && (meetings.data !== null || meetings.error !== null)}
+		<MeetingsSummaryBlock initial={meetings.data} error={meetings.error} />
 	{/if}
 </div>
 
