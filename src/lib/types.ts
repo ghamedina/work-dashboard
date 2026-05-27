@@ -180,3 +180,46 @@ export function jiraStatusVariant(status: string): BadgeVariant {
 	if (s.includes('open') || s.includes('to do') || s.includes('backlog')) return 'warning';
 	return 'gray';
 }
+
+export interface TeamConfig {
+	name: string;
+	jiraProjectKeys: string[];        // empty array → no auto-pull
+	members: TeamMember[];            // empty array → no auto-pull
+}
+
+export interface WeeklyJiraTicket {
+	key: string;
+	summary: string;
+	status: string;
+	statusCategory: 'To Do' | 'In Progress' | 'Done' | 'Other';
+	assigneeName: string | null;
+	updated: string;                  // ISO timestamp
+	url: string;
+}
+
+export interface WeeklyPR {
+	source: 'gitlab' | 'github';
+	id: number;
+	title: string;
+	authorUsername: string;
+	state: 'merged' | 'opened' | 'updated';   // bucket the PR falls in for the week
+	webUrl: string;
+	repo: string;                              // gitlab.repo or owner/name
+	mergedAt: string | null;
+	updatedAt: string;
+}
+
+export interface WeeklyTeamActivity {
+	teamName: string;
+	autoPull: boolean;                         // false if jiraProjectKeys empty
+	jira: {
+		done: WeeklyJiraTicket[];
+		inFlight: WeeklyJiraTicket[];
+		started: WeeklyJiraTicket[];
+	} | null;
+	prs: {
+		merged: WeeklyPR[];
+		opened: WeeklyPR[];
+		updated: WeeklyPR[];
+	} | null;
+}
