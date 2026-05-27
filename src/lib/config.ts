@@ -175,10 +175,11 @@ function buildTeams(settings: YamlSettings): TeamConfig[] {
 
 export function getConfig(): DashboardConfig {
 	const settings = loadSettings();
+	const teams = buildTeams(settings);
 	return {
 		team: buildTeam(settings),
-		teams: buildTeams(settings),
-		managerConfigured: (settings.teams ?? []).length > 0,
+		teams,
+		managerConfigured: teams.length > 0,
 		jira: {
 			baseUrl: settings.jira!.baseUrl!,
 			email: settings.jira!.email!,
