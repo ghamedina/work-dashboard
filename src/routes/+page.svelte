@@ -226,7 +226,9 @@
 	{/if}
 </Container>
 
-<FlagSwitcher amplitudeOrgSlug={data.amplitudeOrgSlug} />
+{#if active === 'work'}
+	<FlagSwitcher amplitudeOrgSlug={data.amplitudeOrgSlug} />
+{/if}
 
 <style>
 	.error-state {
