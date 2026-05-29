@@ -11,14 +11,21 @@ import type { CIPipelineInfo } from '$lib/api/gitlab';
 import { fetchGitHubPRs, fetchGitHubReviewRequests } from '$lib/api/github';
 import { fetchSlackTodos } from '$lib/api/slack';
 import { fetchStarredPages } from '$lib/api/confluence';
+import { fetchWeeklyActivityForTeam } from '$lib/api/managerWeekly';
+import { getMeetingsSummary } from '$lib/api/meetingsSummary';
+import { getCurrentIsoWeek } from '$lib/managerWeek';
+import type { IsoWeek } from '$lib/managerWeek';
 import type {
 	ConfluenceStarredPage,
 	DashboardRow,
 	GitLabMR,
+	MeetingsSummary,
 	ReviewItem,
 	ReviewsData,
 	SlackTodo,
-	UnifiedPR
+	UnifiedPR,
+	WeeklyTeamActivity,
+	WeeklyTeamResult
 } from '$lib/types';
 
 type ApiResult<T> = { data: T; error: null } | { data: null; error: string };
@@ -170,11 +177,31 @@ export const load: PageServerLoad = () => {
 		? resilient(fetchStarredPages(config))
 		: Promise.resolve({ data: [] as ConfluenceStarredPage[], error: null });
 
+	const week: IsoWeek = getCurrentIsoWeek();
+
+	const weekly: Promise<{ week: IsoWeek; teams: WeeklyTeamResult[] }> = (async () => {
+		const teams = await Promise.all(
+			config.teams.map(async (team): Promise<WeeklyTeamResult> => {
+				const activity = await resilient(
+					fetchWeeklyActivityForTeam(config, team, week.start, week.end)
+				);
+				return { name: team.name, activity };
+			})
+		);
+		return { week, teams };
+	})();
+
+	const meetingsSummary: Promise<ApiResult<MeetingsSummary | null>> = config.notionConfigured
+		? resilient(getMeetingsSummary(config, week))
+		: Promise.resolve({ data: null, error: null } as ApiResult<MeetingsSummary | null>);
+
 	return {
 		amplitudeOrgSlug: config.amplitude.orgSlug,
 		githubConfigured: config.github.length > 0,
 		slackConfigured: config.slack !== null,
 		confluenceConfigured: config.confluence !== null,
+		managerConfigured: config.managerConfigured,
+		notionConfigured: config.notionConfigured,
 		slackEmojiName: config.slack?.emojiName ?? 'todo',
 		jiraStatuses: config.jiraStatuses,
 		prStatuses: config.prStatuses,
@@ -187,6 +214,8 @@ export const load: PageServerLoad = () => {
 			reviews,
 			slackTodos,
 			docsReviews,
+			weekly,
+			meetingsSummary,
 			jiraStatuses: jiraStatusesPromise
 		}
 	};

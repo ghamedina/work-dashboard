@@ -48,6 +48,51 @@ github:
 #     jiraEmail: bob@company.com
 #     gitlabAuthorUsername: bob.gitlab
 
+# ─── My Manager tab ──────────────────────────────────────────────────────────
+# Optional: define one or more teams you manage. The "My Manager" tab renders
+# a Weekly Update card with one section per team. Each team can be either
+# auto-pulled (Jira tickets + MRs/PRs for the current ISO week) or manual
+# notes only.
+#
+# AUTO-PULL: set `jiraProjectKeys` AND list members with the relevant
+# identities (jiraEmail for Jira, gitlabAuthorUsername for GitLab MRs,
+# githubAuthorUsername for GitHub PRs).
+#
+# MANUAL ONLY: omit `jiraProjectKeys`. The section renders just a notes
+# textarea (persisted in your browser's localStorage per ISO week).
+#
+# Omit this whole block to hide the tab.
+#
+# teams:
+#   - name: Design System
+#     jiraProjectKeys: [DSTM, GDSP]
+#     members:
+#       - name: Your Name
+#         jiraEmail: you@company.com
+#         gitlabAuthorUsername: your.username
+#         githubAuthorUsername: your-gh
+#       - name: Teammate
+#         jiraEmail: teammate@company.com
+#         gitlabAuthorUsername: teammate.gitlab
+#   - name: Reporting
+#     # no jiraProjectKeys, no members → manual notes only
+
+# ─── Notion (for meetings summary in My Manager tab) ──────────────────────────
+# Optional: if you use Granola to take meeting notes and Granola is configured
+# to sync those notes into a Notion database, the My Manager tab can render an
+# LLM-summarized bullet list of this week's meetings.
+# Requires NOTION_TOKEN in .env (Notion internal integration token).
+# Omit this block to hide the meetings block.
+# notion:
+#   meetingsDbId: 00000000000000000000000000000000   # 32-char hex (Notion DB id)
+
+# ─── Claude CLI (for meetings summary synthesis) ──────────────────────────────
+# The dashboard shells out to your local Claude Code CLI to summarize meeting
+# notes. Uses your existing subscription auth — no API key needed.
+# claudeCli:
+#   binary: claude                                    # CLI command (or absolute path)
+#   model: claude-haiku-4-5                           # cheapest, fastest model
+
 # ─── Slack ────────────────────────────────────────────────────────────────────
 # Optional: show a "Slack Todos" tab listing Slack messages you reacted to
 # with a chosen emoji. Your token goes in .env as SLACK_TOKEN.

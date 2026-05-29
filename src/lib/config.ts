@@ -3,7 +3,7 @@ import { join } from 'path';
 import { parse } from 'yaml';
 import { JIRA_TOKEN, GITLAB_TOKEN, GITHUB_TOKEN } from '$env/static/private';
 import { env as privateEnv } from '$env/dynamic/private';
-import type { TeamMember } from '$lib/types';
+import type { TeamMember, TeamConfig } from '$lib/types';
 
 export type TerminalChoice = 'Terminal' | 'iTerm2' | 'Warp';
 
@@ -33,7 +33,19 @@ interface YamlSettings {
 		baseUrl?: string;
 		since?: string;
 	};
+	notion?: {
+		meetingsDbId?: string;
+	};
+	claudeCli?: {
+		binary?: string;
+		model?: string;
+	};
 	team?: TeamMember[];
+	teams?: Array<{
+		name?: string;
+		jiraProjectKeys?: string[];
+		members?: TeamMember[];
+	}>;
 	amplitude?: {
 		baseUrl?: string;
 		orgSlug?: string;
@@ -113,7 +125,18 @@ export interface DashboardConfig {
 		baseUrl: string;
 		since: string;
 	} | null;
+	notion: {
+		token: string;
+		meetingsDbId: string;
+	} | null;
+	notionConfigured: boolean;
+	claudeCli: {
+		binary: string;
+		model: string;
+	};
 	team: TeamMember[];
+	teams: TeamConfig[];
+	managerConfigured: boolean;
 	amplitude: {
 		baseUrl: string;
 		orgSlug: string;
@@ -155,10 +178,29 @@ function buildTeam(settings: YamlSettings): TeamMember[] {
 	];
 }
 
+function buildTeams(settings: YamlSettings): TeamConfig[] {
+	if (!settings.teams || settings.teams.length === 0) return [];
+	return settings.teams
+		.filter((t) => t.name)
+		.map((t) => ({
+			name: t.name!,
+			jiraProjectKeys: t.jiraProjectKeys ?? [],
+			members: t.members ?? []
+		}));
+}
+
 export function getConfig(): DashboardConfig {
 	const settings = loadSettings();
+	const teams = buildTeams(settings);
+	const notionDbId = settings.notion?.meetingsDbId;
+	const notionToken = privateEnv.NOTION_TOKEN ?? '';
+	if (notionDbId && !notionToken) {
+		throw new Error('settings.yml: notion.meetingsDbId is set but NOTION_TOKEN is missing from .env');
+	}
 	return {
 		team: buildTeam(settings),
+		teams,
+		managerConfigured: teams.length > 0,
 		jira: {
 			baseUrl: settings.jira!.baseUrl!,
 			email: settings.jira!.email!,
@@ -196,6 +238,14 @@ export function getConfig(): DashboardConfig {
 				since: settings.confluence.since
 			}
 			: null,
+		notion: notionDbId
+			? { token: notionToken, meetingsDbId: notionDbId }
+			: null,
+		notionConfigured: !!notionDbId,
+		claudeCli: {
+			binary: settings.claudeCli?.binary ?? 'claude',
+			model: settings.claudeCli?.model ?? 'claude-haiku-4-5'
+		},
 		amplitude: {
 			baseUrl: settings.amplitude!.baseUrl!,
 			orgSlug: settings.amplitude?.orgSlug ?? '',
